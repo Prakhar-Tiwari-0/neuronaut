@@ -25,12 +25,12 @@ export function Bounties() {
             <Label className="mb-2">{state}</Label>
             <div className="border-t border-line">
               {bs.map((b) => (
-                <Link key={b.slug} to={`/b/${b.slug}`} className="grid grid-cols-[180px_1fr_90px_80px_90px] items-baseline gap-4 border-b border-line py-3 hover:bg-raised">
+                <Link key={b.slug} to={`/b/${b.slug}`} className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 border-b border-line py-3 hover:bg-raised md:grid-cols-[180px_1fr_90px_80px_90px]">
                   <span className="font-medium">{b.title}</span>
-                  <span className="truncate text-dim">{b.brief}</span>
+                  <span className="hidden truncate text-dim md:block">{b.brief}</span>
                   <span className="font-mono text-xs text-dim">{b.maxNeurons === 1 ? "1 neuron" : `${b.maxNeurons} neurons`}</span>
-                  <span className="font-mono text-xs">{b.par === null ? <span className="text-faint">par ?</span> : `par ${Math.round(b.par)}`}</span>
-                  <span className="text-right font-mono text-xs text-dim">
+                  <span className="text-right font-mono text-xs md:text-left">{b.par === null ? <span className="text-faint">par ?</span> : `par ${Math.round(b.par)}`}</span>
+                  <span className="col-start-2 row-start-1 text-right font-mono text-xs text-dim md:col-start-auto md:row-start-auto">
                     {state === "open" ? `${until(b.endsAt)} left` : state === "upcoming" ? `in ${until(b.startsAt)}` : "closed"}
                   </span>
                 </Link>

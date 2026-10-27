@@ -13,24 +13,25 @@ export function Nav() {
   const { me, signedIn, signIn, signOut, requireJoin } = useSession();
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur-sm">
-      <div className="mx-auto flex h-12 max-w-[1180px] items-center gap-6 px-5">
-        <Link to="/" className="font-pixel text-[15px] tracking-wide">
+      {/* phones: logo and account on one row, the links on a second row that scrolls sideways */}
+      <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-x-6 px-5">
+        <Link to="/" className="flex h-12 items-center font-pixel text-[15px] tracking-wide">
           NEURONAUT
         </Link>
-        <nav className="flex items-center gap-4 text-[13px]">
+        <nav className="order-last -mx-5 flex w-[calc(100%+2.5rem)] items-center gap-4 overflow-x-auto whitespace-nowrap px-5 pb-2.5 text-[13px] md:order-none md:mx-0 md:w-auto md:p-0">
           {LINKS.map(([to, label]) => (
             <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "text-fg" : "text-dim hover:text-fg")}>
               {label}
             </NavLink>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-4 font-mono text-xs">
+        <div className="ml-auto flex h-12 items-center gap-4 font-mono text-xs">
           {me ? (
             <>
-              <span className="text-dim" title="Scans left today">
+              <span className="hidden text-dim sm:inline" title="Scans left today">
                 scans <span className="text-fg">{me.scansLeft}</span>
               </span>
-              <span className="text-dim" title="Catches left today">
+              <span className="hidden text-dim sm:inline" title="Catches left today">
                 catches <span className="text-fg">{me.catchesLeft}</span>
               </span>
               <span className="text-dim">

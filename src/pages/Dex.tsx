@@ -80,14 +80,14 @@ export function Dex() {
       </section>
 
       <section>
-        <div className="flex items-center gap-5 border-b border-line">
+        <div className="flex flex-wrap items-center gap-x-5 border-b border-line">
           {(["caught", "seen"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`-mb-px border-b py-2 text-[13px] ${tab === t ? "border-fg text-fg" : "border-transparent text-dim hover:text-fg"}`}>
+            <button key={t} onClick={() => setTab(t)} className={`-mb-px whitespace-nowrap border-b py-2 text-[13px] ${tab === t ? "border-fg text-fg" : "border-transparent text-dim hover:text-fg"}`}>
               {t === "caught" ? "Caught by everyone" : "Seen by you"}
             </button>
           ))}
           {tab === "caught" && (
-            <div className="ml-auto flex gap-3 font-pixel text-[11px] uppercase">
+            <div className="flex w-full flex-wrap gap-x-3 gap-y-1 pb-2 font-pixel text-[11px] uppercase md:ml-auto md:w-auto md:pb-0">
               <button onClick={() => setRarity(undefined)} className={rarity ? "text-faint hover:text-fg" : "text-fg"}>
                 all
               </button>
@@ -117,9 +117,9 @@ function Caught({ rarity }: { rarity?: Rarity }) {
             <tr key={`${c.layer}:${c.n}`} className="border-b border-line align-baseline">
               <td className="w-28 py-2"><NeuronLink layer={c.layer} n={c.n} /></td>
               <td className="py-2 font-medium">{c.name}</td>
-              <td className="w-32 py-2"><RarityTag rarity={c.rarity} /></td>
-              <td className="py-2 text-dim"><Tokens tokens={c.words} /></td>
-              <td className="w-28 py-2 font-mono text-xs">
+              <td className="w-28 py-2"><RarityTag rarity={c.rarity} /></td>
+              <td className="hidden py-2 text-dim md:table-cell"><Tokens tokens={c.words} /></td>
+              <td className="hidden w-28 py-2 font-mono text-xs sm:table-cell">
                 <Link to={`/t/${c.handle}`} className="hover:underline underline-offset-4">{c.handle}</Link>
               </td>
               <td className="w-14 py-2 text-right font-mono text-xs">{c.points}</td>
