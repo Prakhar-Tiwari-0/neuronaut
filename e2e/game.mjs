@@ -161,7 +161,7 @@ try {
     try {
       await client.mutation("bounties:submit", { slug: "lost-at-sea", pushes: [{ layer: 23, n: 8663, dose: NaN }] });
     } catch (e) {
-      if (/Doses are/.test(String(e))) return "refused";
+      if (/Doses are/.test(String(e?.data ?? e))) return "refused"; // production keeps the text only in ConvexError.data
       throw e;
     }
     throw new Error("NaN dose was accepted");
