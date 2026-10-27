@@ -1,6 +1,6 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { LIMITS, playerFor, sha256, today } from "./lib";
+import { LIMITS, playerFor, sha256, today, type Rarity } from "./lib";
 
 // A player is a handle plus a secret token the browser generates and keeps. The token is the login: the same token on
 // another device is the same player.
@@ -8,10 +8,10 @@ export const join = mutation({
   args: { handle: v.string(), token: v.string() },
   handler: async (ctx, { handle, token }) => {
     const h = handle.trim();
-    if (!/^[A-Za-z0-9_-]{3,16}$/.test(h)) throw new Error("Handles are 3-16 letters, digits, _ or -");
-    if (token.length < 32) throw new Error("bad token");
+    if (!/^[A-Za-z0-9_-]{3,16}$/.test(h)) throw new ConvexError("Handles are 3-16 letters, digits, _ or -");
+    if (token.length < 32) throw new ConvexError("bad token");
     const taken = await ctx.db.query("players").withIndex("by_handle", (q) => q.eq("handleLower", h.toLowerCase())).unique();
-    if (taken) throw new Error(`${h} is taken`);
+    if (taken) throw new ConvexError(`${h} is taken`);
     await ctx.db.insert("players", {
       handle: h,
       handleLower: h.toLowerCase(),
@@ -83,7 +83,7 @@ export const profile = query({
       streak: p.streak,
       bestStreak: p.bestStreak,
       bountyWins: p.bountyWins,
-      catches: catches.map((c) => ({ layer: c.layer, n: c.n, name: c.name, rarity: c.rarity, points: c.points, date: c.date })),
+      catches: catches.map((c) => ({ layer: c.layer, n: c.n, name: c.name, rarity: c.rarity as Rarity, points: c.points, date: c.date })),
     };
   },
 });

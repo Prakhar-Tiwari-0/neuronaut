@@ -19,7 +19,10 @@ export async function globalStats(ctx: QueryCtx) {
   return await ctx.db.query("stats").withIndex("by_name", (q) => q.eq("name", "global")).unique();
 }
 
-export async function bumpStats(ctx: MutationCtx, change: { profiled?: number; caught?: { layer: number; n: number } }) {
+export async function bumpStats(
+  ctx: MutationCtx,
+  change: { profiled?: number; caught?: { layer: number; n: number }; baseline?: { prompts: string[]; texts: string[] } },
+) {
   let s = await globalStats(ctx);
   if (!s) {
     const id = await ctx.db.insert("stats", {
@@ -31,6 +34,7 @@ export async function bumpStats(ctx: MutationCtx, change: { profiled?: number; c
     s = (await ctx.db.get(id))!;
   }
   const patch: Partial<Doc<"stats">> = {};
+  if (change.baseline) Object.assign(patch, { prompts: change.baseline.prompts, baseline: change.baseline.texts });
   if (change.profiled) patch.profiled = s.profiled + change.profiled;
   if (change.caught) {
     const { layer, n } = change.caught;

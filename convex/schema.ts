@@ -5,10 +5,15 @@ export const push = v.object({ layer: v.number(), n: v.number(), dose: v.number(
 
 export default defineSchema({
   // One row, "global": totals and the dex coverage grid (layers x COVERAGE_BINS catch counts).
-  stats: defineTable({ name: v.string(), profiled: v.number(), caught: v.number(), coverage: v.array(v.number()) }).index(
-    "by_name",
-    ["name"],
-  ),
+  // Also the profile prompts and the unsteered model's replies to them, which every card compares against.
+  stats: defineTable({
+    name: v.string(),
+    profiled: v.number(),
+    caught: v.number(),
+    coverage: v.array(v.number()),
+    prompts: v.optional(v.array(v.string())),
+    baseline: v.optional(v.array(v.string())),
+  }).index("by_name", ["name"]),
 
   // Every neuron in the model with its steer lens and logit lens tokens: the searchable index players hunt with.
   neurons: defineTable({

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type QueryCtx } from "./_generated/server";
 import { BOUNTY_DAYS, BOUNTY_STAGGER_HOURS, JUDGE_PROMPTS, POOL } from "./bountyPool";
@@ -83,17 +83,17 @@ export const submit = mutation({
     const player = await requirePlayer(ctx, token);
     const b = await ctx.db.query("bounties").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
     const now = Date.now();
-    if (!b || now < b.startsAt || now >= b.endsAt) throw new Error("This bounty isn't open");
-    if (pushes.length < 1 || pushes.length > b.maxNeurons) throw new Error(`Use 1-${b.maxNeurons} neurons`);
+    if (!b || now < b.startsAt || now >= b.endsAt) throw new ConvexError("This bounty isn't open");
+    if (pushes.length < 1 || pushes.length > b.maxNeurons) throw new ConvexError(`Use 1-${b.maxNeurons} neurons`);
     const keys = new Set<string>();
     for (const p of pushes) {
       validNeuron(p.layer, p.n);
-      if (Math.abs(p.dose) < DOSE.min || Math.abs(p.dose) > DOSE.max) throw new Error(`Doses are ${DOSE.min} to ${DOSE.max} (or negative)`);
+      if (Math.abs(p.dose) < DOSE.min || Math.abs(p.dose) > DOSE.max) throw new ConvexError(`Doses are ${DOSE.min} to ${DOSE.max} (or negative)`);
       keys.add(`${p.layer}:${p.n}`);
     }
-    if (keys.size !== pushes.length) throw new Error("Each neuron once");
+    if (keys.size !== pushes.length) throw new ConvexError("Each neuron once");
     const mine = await ctx.db.query("entries").withIndex("by_player_bounty", (q) => q.eq("playerId", player._id).eq("bountyId", b._id)).collect();
-    if (mine.length >= LIMITS.entries) throw new Error(`Out of entries for this bounty (${LIMITS.entries})`);
+    if (mine.length >= LIMITS.entries) throw new ConvexError(`Out of entries for this bounty (${LIMITS.entries})`);
     const pushesR = pushes.map((p) => ({ ...p, dose: Math.round(p.dose * 100) / 100 }));
     const entryId = await ctx.db.insert("entries", { bountyId: b._id, playerId: player._id, pushes: pushesR, status: "pending" });
     await enqueue(ctx, "judge", `judge:${entryId}`, { entryId, slug, pushes: pushesR, prompts: b.prompts, anchors: b.anchors }, 0);

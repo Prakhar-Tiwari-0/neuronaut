@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { enqueue } from "./jobs";
@@ -109,13 +109,13 @@ export const guess = mutation({
     const player = await requirePlayer(ctx, token);
     const date = today();
     const daily = await dailyFor(ctx, date);
-    if (!daily) throw new Error("No puzzle today yet");
+    if (!daily) throw new ConvexError("No puzzle today yet");
     if (await ctx.db.query("results").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).unique())
-      throw new Error("You already finished today's neuron");
+      throw new ConvexError("You already finished today's neuron");
     const key = neuronKey(layer, n);
     const gs = await ctx.db.query("guesses").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).collect();
-    if (gs.length >= LIMITS.guesses) throw new Error("Out of guesses");
-    if (gs.some((g) => g.key === key)) throw new Error(`Already guessed L${layer} N${n}`);
+    if (gs.length >= LIMITS.guesses) throw new ConvexError("Out of guesses");
+    if (gs.some((g) => g.key === key)) throw new ConvexError(`Already guessed L${layer} N${n}`);
     const id = await ctx.db.insert("guesses", { playerId: player._id, date, key, layer, n, status: "pending" });
     if (!(await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first()))
       await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "guess" });

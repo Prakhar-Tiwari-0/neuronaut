@@ -74,6 +74,14 @@ export const putProfiles = mutation({
   },
 });
 
+export const putBaseline = mutation({
+  args: { secret: v.string(), prompts: v.array(v.string()), texts: v.array(v.string()) },
+  handler: async (ctx, { secret, prompts, texts }) => {
+    checkWorker(secret);
+    await bumpStats(ctx, { baseline: { prompts, texts } });
+  },
+});
+
 export const finishJudge = mutation({
   args: {
     secret: v.string(),

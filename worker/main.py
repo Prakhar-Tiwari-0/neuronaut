@@ -16,7 +16,7 @@ from collections import Counter
 import numpy as np
 from convex import ConvexClient
 
-from engine import PROFILE_DOSE, Engine, words
+from engine import PROFILE_DOSE, Engine, distinct2, words
 from lens import Lens, norm
 
 MODEL = os.environ.get("GAME_MODEL", "Qwen/Qwen3.5-4B")
@@ -121,17 +121,21 @@ class Worker:
             for p in good:
                 near = self.call("action", "worker:nearest", embedding=p["embedding"], limit=3)
                 twin = max([s for s in near if s < 0.9999] or [0])
-                if twin < 0.9:
-                    return self.publish(job, a["date"], p, rng)
+                if twin < 0.9 and self.publish(job, a["date"], p, rng):
+                    return
             print(f"daily {a['date']}: attempt {attempt} found no puzzle among {len(good)} candidates", flush=True)
         raise RuntimeError("no suitable neuron found")
 
     def publish(self, job, date, p, rng):
+        """Writes the puzzle if the neuron's replies to the display prompts stay readable (no loops, no silence);
+        returns whether it did."""
         l, n = p["layer"], p["n"]
         prompts = rng.sample(DISPLAY_PROMPTS, 3)
         texts, baseline = [], []
         for q in prompts:
-            (s, _), (b, _) = self.eng.generate(q, [[self.eng.push(l, n, PROFILE_DOSE)], []])
+            (s, ids), (b, _) = self.eng.generate(q, [[self.eng.push(l, n, PROFILE_DOSE)], []])
+            if not s or distinct2(ids) < 0.7:
+                return False
             texts.append(s)
             baseline.append(b)
         lo = max(0, min(self.eng.L - 8, l - rng.randint(0, 7)))
@@ -139,6 +143,7 @@ class Worker:
         self.call("action", "worker:putDaily", id=job["id"], date=date, layer=l, n=n, prompts=prompts, texts=texts,
                   baseline=baseline, embedding=p["embedding"], band=[lo, lo + 7], hint=hint)
         print(f"daily {date}: L{l} N{n} {p['words'][:5]} z={p['z']:.1f}", flush=True)
+        return True
 
     # ---------- sweep ----------
     def sweep_batch(self, state, size=96):
@@ -170,6 +175,8 @@ class Worker:
             L, N = self.lens.kl.shape
             order = np.random.default_rng(0).permutation(np.argwhere(np.ones((L, N), bool)))
             state = (order, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", f"sweep-{MODEL.replace('/', '--')}.cursor"))
+        self.call("mutation", "worker:putBaseline", prompts=[b["prompt"] for b in self.eng.base],
+                  texts=[b["text"] for b in self.eng.base])
         print("worker ready", flush=True)
         while True:
             jobs = self.call("mutation", "worker:claim", max=24)

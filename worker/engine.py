@@ -277,14 +277,14 @@ class Engine:
     def judge(self, entries, prompts, anchors):
         """Scores bounty entries (each a list of (layer, n, dose)) on the hidden prompts.
         concept = cosine between the entry's shift and the anchors' shift. coherence = 1 up to NLL 2.0, falling to 0
-        at 3.5, and 0 if the replies loop (distinct-2 under 0.6). efficiency = 1 up to a total dose of 0.5, then -0.25
+        at 3.5, and 0 if any reply loops (distinct-2 under 0.5). efficiency = 1 up to a total dose of 0.5, then -0.25
         per unit, floor 0.4. score = 1000 x max(concept, 0) x coherence x efficiency."""
         base, target = self._target(prompts, anchors)
         rows = [[self.push(l, n, d) for l, n, d in e] for e in entries]
         out = []
         for e, m in zip(entries, self.measure(rows, base=base)):
             concept = float(torch.nn.functional.cosine_similarity(m["shift"], target, dim=0))
-            coherence = min(1.0, max(0.0, (3.5 - m["nll"]) / 1.5)) * (m["distinct"] >= 0.6)
+            coherence = min(1.0, max(0.0, (3.5 - m["nll"]) / 1.5)) * (m["distinct"] >= 0.5)
             dose = sum(abs(d) for _, _, d in e)
             efficiency = min(1.0, max(0.4, 1 - 0.25 * (dose - 0.5)))
             out.append({"score": round(1000 * max(concept, 0.0) * coherence * efficiency, 1), "concept": round(concept, 4),

@@ -1,5 +1,5 @@
 import { paginationOptsValidator } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { action, internalMutation, internalQuery, mutation, query, type QueryCtx } from "./_generated/server";
@@ -78,7 +78,7 @@ export const scan = mutation({
     const date = today();
     const used = (await ctx.db.query("scans").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).collect())
       .filter((s) => s.source === "scan").length;
-    if (used >= LIMITS.scans) throw new Error(`Out of scans for today (${LIMITS.scans}). They refill at 00:00 UTC.`);
+    if (used >= LIMITS.scans) throw new ConvexError(`Out of scans for today (${LIMITS.scans}). They refill at 00:00 UTC.`);
     await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "scan" });
     if (!(await profileOf(ctx, key))) await enqueue(ctx, "profile", `profile:${key}`, { layer, n }, 0);
     return { layer, n };
@@ -115,10 +115,10 @@ export const catchCheck = internalQuery({
     const player = await requirePlayer(ctx, token);
     const key = neuronKey(layer, n);
     const scanned = await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first();
-    if (!scanned) throw new Error("Scan it before you catch it");
+    if (!scanned) throw new ConvexError("Scan it before you catch it");
     const prof = await profileOf(ctx, key);
-    if (!prof) throw new Error("Still measuring this neuron");
-    if (await catchOf(ctx, key)) throw new Error("Someone already caught this one");
+    if (!prof) throw new ConvexError("Still measuring this neuron");
+    if (await catchOf(ctx, key)) throw new ConvexError("Someone already caught this one");
     return { embedding: prof.embedding };
   },
 });
@@ -130,8 +130,8 @@ export const catchCommit = internalMutation({
     const key = neuronKey(layer, n);
     const date = today();
     const caughtToday = await ctx.db.query("catches").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).collect();
-    if (caughtToday.length >= LIMITS.catches) throw new Error(`Out of catches for today (${LIMITS.catches})`);
-    if (await catchOf(ctx, key)) throw new Error("Someone already caught this one");
+    if (caughtToday.length >= LIMITS.catches) throw new ConvexError(`Out of catches for today (${LIMITS.catches})`);
+    if (await catchOf(ctx, key)) throw new ConvexError("Someone already caught this one");
     const prof = (await profileOf(ctx, key))!;
     const rarity = prof.rarity as Rarity;
     const points = Math.round(POINTS[rarity] * (1 + uniqueness));
@@ -149,7 +149,7 @@ export const catchNeuron = action({
   args: { token: v.string(), layer: v.number(), n: v.number(), name: v.string() },
   handler: async (ctx, args): Promise<{ points: number; rarity: string; uniqueness: number }> => {
     const name = args.name.trim().replace(/\s+/g, " ");
-    if (name.length < 2 || name.length > 24) throw new Error("Names are 2-24 characters");
+    if (name.length < 2 || name.length > 24) throw new ConvexError("Names are 2-24 characters");
     const { embedding } = await ctx.runQuery(internal.neurons.catchCheck, args);
     const near = await ctx.vectorSearch("profiles", "by_embedding", { vector: embedding, limit: 1, filter: (q) => q.eq("caught", true) });
     const uniqueness = Math.min(1, Math.max(0, 1 - (near[0]?._score ?? 0)));
@@ -194,6 +194,8 @@ export const overview = query({
     const s = await globalStats(ctx);
     const recent = await ctx.db.query("catches").order("desc").take(12);
     return {
+      prompts: s?.prompts ?? [],
+      baseline: s?.baseline ?? [],
       total: MODEL.layers * MODEL.width,
       profiled: s?.profiled ?? 0,
       caught: s?.caught ?? 0,
