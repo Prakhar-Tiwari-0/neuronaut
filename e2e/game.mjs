@@ -1,0 +1,136 @@
+// End-to-end run of the whole game against a live stack (Convex, the GPU worker, Vite), in a real browser:
+// join, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged.
+//
+//   node e2e/game.mjs [--url http://127.0.0.1:5173]
+//
+// Writes e2e/artifacts/<timestamp>/: a screenshot per step and report.json (each step, ok, details), and exits
+// non-zero if a step fails. The daily's answer comes from `convex run admin:answer`, so the solve path is exercised.
+import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { chromium } from "playwright";
+
+const url = process.argv.includes("--url") ? process.argv[process.argv.indexOf("--url") + 1] : "http://127.0.0.1:5173";
+const out = join("e2e", "artifacts", new Date().toISOString().replace(/[:.]/g, "-"));
+mkdirSync(out, { recursive: true });
+const report = { url, steps: [] };
+const handle = `e2e_${Math.random().toString(36).slice(2, 8)}`;
+
+function convex(fn, args) {
+  const env = { ...process.env, CONVEX_AGENT_MODE: "anonymous", CONVEX_TMPDIR: join(process.cwd(), ".tmp") };
+  return JSON.parse(execFileSync("bunx", ["convex", "run", fn, JSON.stringify(args)], { env, encoding: "utf8" }));
+}
+
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+
+async function step(name, fn) {
+  const t0 = Date.now();
+  let ok = true;
+  let detail;
+  try {
+    detail = await fn();
+  } catch (e) {
+    ok = false;
+    detail = String(e?.message ?? e).split("\n")[0];
+  }
+  await page.screenshot({ path: join(out, `${report.steps.length + 1}-${name}.png`), fullPage: true });
+  report.steps.push({ name, ok, seconds: (Date.now() - t0) / 1000, detail });
+  console.log(`${ok ? "ok  " : "FAIL"} ${name}: ${JSON.stringify(detail)?.slice(0, 160)}`);
+  if (!ok) throw new Error(name);
+}
+
+try {
+  await step("join", async () => {
+    await page.goto(url + "/");
+    await page.getByRole("button", { name: "Pick a handle" }).click();
+    await page.getByPlaceholder("handle").fill(handle);
+    await page.getByRole("button", { name: "Start" }).click();
+    await page.getByRole("link", { name: handle }).waitFor();
+    return { handle };
+  });
+
+  await step("lens search", async () => {
+    await page.goto(url + "/dex");
+    await page.getByPlaceholder(/search lenses/).fill("ocean");
+    await page.getByRole("button", { name: "open" }).first().waitFor({ timeout: 15000 });
+    return { results: await page.getByRole("button", { name: "open" }).count() };
+  });
+
+  let neuron;
+  await step("scan a random neuron", async () => {
+    await page.getByRole("button", { name: "Random" }).click();
+    await page.waitForURL(/\/n\/\d+\/\d+/);
+    neuron = page.url().split("/n/")[1];
+    await page.getByText("Strength").waitFor({ timeout: 120000 });
+    return { neuron, card: (await page.locator("main").innerText()).split("\n").slice(2, 6).join(" | ") };
+  });
+
+  await step("catch it", async () => {
+    await page.getByLabel("name", { exact: true }).fill("e2e catch");
+    await page.getByRole("button", { name: "Catch" }).click();
+    const msg = await page.getByText(/Caught\. \+\d+ pts/).textContent({ timeout: 30000 });
+    await page.goto(url + "/dex");
+    await page.getByText("e2e catch").first().waitFor();
+    return { msg };
+  });
+
+  await step("daily: wrong guesses get heat", async () => {
+    await page.goto(url + "/daily");
+    await page.getByRole("heading", { name: /DAILY #\d+/ }).waitFor({ timeout: 30000 });
+    for (const [l, n] of [[5, 100], [17, 4242]]) {
+      await page.getByLabel("layer", { exact: true }).fill(String(l));
+      await page.getByLabel("neuron").fill(String(n));
+      await page.getByRole("button", { name: "Guess", exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector('input[aria-label="neuron"]')?.value);  // guess landed
+    }
+    await page.waitForFunction(() => document.querySelectorAll("tbody tr").length >= 2 && !document.body.innerText.includes("measuring"), null, { timeout: 120000 });
+    return { rows: await page.locator("tbody tr").allInnerTexts() };
+  });
+
+  await step("daily: solve", async () => {
+    const date = new Date().toISOString().slice(0, 10);
+    const ans = convex("admin:answer", { date });
+    await page.getByLabel("layer", { exact: true }).fill(String(ans.layer));
+    await page.getByLabel("neuron").fill(String(ans.n));
+    await page.getByRole("button", { name: "Guess", exact: true }).click();
+    const solved = await page.getByText(/Solved in \d+/).textContent({ timeout: 60000 });
+    return { answer: ans, solved };
+  });
+
+  await step("bounty: enter and get judged", async () => {
+    await page.goto(url + "/bounties");
+    await page.getByText("Lost at Sea").first().click();
+    await page.getByRole("heading", { name: "Lost at Sea" }).waitFor();
+    await page.getByLabel("layer", { exact: true }).fill("23");
+    await page.getByLabel("neuron").fill("8663");
+    await page.getByLabel("dose").fill("0.6");
+    await page.getByRole("button", { name: "Submit" }).click();
+    await page.getByText(/concept -?\d/).waitFor({ timeout: 120000 });
+    const entry = await page.getByText(/concept -?\d/).locator("..").innerText();
+    return { entry: entry.replace(/\s+/g, " ") };
+  });
+
+  await step("trainer page", async () => {
+    await page.goto(url + `/t/${handle}`);
+    await page.getByText("Points").waitFor();
+    const points = await page.getByText("Points").locator("..").innerText();
+    return { points: points.replace(/\s+/g, " ") };
+  });
+
+  await step("no page errors", async () => {
+    if (errors.length) throw new Error(errors.join(" | "));
+    return "none";
+  });
+} catch {
+  // the failing step is already in the report
+} finally {
+  await browser.close();
+}
+
+report.ok = report.steps.every((s) => s.ok) && report.steps.length === 9;
+writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 1));
+console.log(`${report.ok ? "PASS" : "FAIL"} -> ${out}`);
+process.exit(report.ok ? 0 : 1);
