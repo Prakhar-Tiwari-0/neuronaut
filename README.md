@@ -13,9 +13,9 @@ neuron index come from there.
 <!-- sweep:start -->
 **Sweep progress** (every neuron in Qwen3.5-4B, measured once on a 4080 Super)
 
-`██████░░░░░░░░░░░░░░░░░░░░░░░░` 58,080 / 294,912 (19.7%)
+`██████░░░░░░░░░░░░░░░░░░░░░░░░` 62,112 / 294,912 (21.1%)
 
-About 11.8 h left at 180 ms per neuron, ETA 2026-10-28 06:58 UTC. Updated 2026-10-27 19:09 UTC.
+About 8.8 h left at 136 ms per neuron, ETA 2026-10-28 04:07 UTC. Updated 2026-10-27 19:19 UTC.
 <!-- sweep:end -->
 
 ## Modes
