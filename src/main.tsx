@@ -5,6 +5,7 @@ import { StrictMode, Suspense, lazy, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./index.css";
+import { api } from "../convex/_generated/api";
 import { Nav } from "./components/Nav";
 import { SessionProvider } from "./lib/session";
 import { useIsDark } from "./lib/theme";
@@ -21,6 +22,11 @@ const Trainer = lazy(() => import("./pages/Trainers").then((m) => ({ default: m.
 const How = lazy(() => import("./pages/How").then((m) => ({ default: m.How })));
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
+
+// Send the landing page's queries as soon as the socket opens instead of after React mounts (~230 ms sooner on a fast
+// machine, around a second on a throttled phone). Signed-in players get a refreshed result once auth arrives.
+const PREWARM = { "/": [api.neurons.overview, api.daily.current, api.bounties.list], "/daily": [api.daily.current], "/dex": [api.neurons.overview], "/bounties": [api.bounties.list] } as const;
+for (const query of PREWARM[location.pathname as keyof typeof PREWARM] ?? []) convex.prewarmQuery({ query, args: {}, extendSubscriptionFor: 10_000 });
 
 // Clerk's sign-in modal in the site's colors, following the theme.
 function Clerk({ children }: { children: ReactNode }) {
