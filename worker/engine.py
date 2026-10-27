@@ -22,6 +22,7 @@ from collections import Counter
 
 import numpy as np
 import torch
+from transformers.cache_utils import LinearAttentionLayer
 
 from spec import Spec
 
@@ -42,6 +43,18 @@ when where why how not no yes do does did done have has had having can could wil
 very really also too there here about into over under up down out off again more most some any all each every other such
 only own same than s t don't i'm it's you're i'll i've let's like get got one two well""".split())
 WORD = re.compile(r"[a-zA-Z][a-zA-Z'-]{2,}")
+
+
+def _assign_recurrent_state(self, recurrent_states, state_idx=0, **kwargs):
+    # transformers copies each step's new linear-attention state into the cache so cudagraphs keep a fixed address. We
+    # don't use cudagraphs, and at sweep batch sizes that copy (~200 MB per layer per step) is a third of decode time.
+    if not self.is_recurrent_states_initialized[state_idx]:
+        self.lazy_initialization(recurrent_states=recurrent_states, state_idx=state_idx)
+    self.recurrent_states[state_idx] = recurrent_states
+    return recurrent_states
+
+
+LinearAttentionLayer.update_recurrent_state = _assign_recurrent_state
 
 
 def distinct2(ids):

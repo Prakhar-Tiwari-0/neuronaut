@@ -149,8 +149,10 @@ class Worker:
         return True
 
     # ---------- sweep ----------
-    def sweep_batch(self, state, size=96):
-        """Measures the next `size` neurons of a fixed random order of the whole model. Returns False when done."""
+    def sweep_batch(self, state, size=64):
+        """Measures the next `size` neurons of a fixed random order of the whole model. Returns False when done.
+        64 rows peak at ~14.4 GiB on a 16 GB card. Past what's free, WSL spills to system RAM and decode gets ~9x slower
+        per row, so don't raise it without measuring."""
         order, path = state
         cur = int(open(path).read()) if os.path.exists(path) else 0
         if cur >= len(order):
