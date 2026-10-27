@@ -1,10 +1,10 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { action, internalMutation, mutation, query } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { resolvePending } from "./daily";
 import { bumpStats } from "./jobs";
-import { checkWorker, neuronKey, rarity } from "./lib";
+import { checkWorker, neuronKey, rarity, today } from "./lib";
 import { push } from "./schema";
 
 // The GPU worker's API (worker/main.py). Every call carries WORKER_SECRET.
@@ -149,5 +149,33 @@ export const insertDaily = internalMutation({
   handler: async (ctx, { id, ...d }) => {
     if (!(await ctx.db.query("dailies").withIndex("by_date", (q) => q.eq("date", d.date)).unique())) await ctx.db.insert("dailies", d);
     await ctx.db.patch(id, { status: "done" });
+  },
+});
+
+export const upcomingDailies = internalQuery({
+  args: { from: v.string() },
+  handler: async (ctx, { from }) =>
+    (await ctx.db.query("dailies").withIndex("by_date", (q) => q.gte("date", from)).collect()).map((d) => ({ id: d._id, embedding: d.embedding })),
+});
+
+export const setNeighbors = internalMutation({
+  args: { id: v.id("dailies"), neighbors: v.array(v.number()) },
+  handler: async (ctx, { id, neighbors }) => {
+    await ctx.db.patch(id, { neighbors });
+  },
+});
+
+// Recomputes today's and future puzzles' neighbor cosines against everything measured so far. Ranks are only as good
+// as the sweep's coverage when the puzzle was made, so the worker calls this as the sweep fills in.
+export const refreshNeighbors = action({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }): Promise<number> => {
+    checkWorker(secret);
+    const ds = await ctx.runQuery(internal.worker.upcomingDailies, { from: today() });
+    for (const d of ds) {
+      const hits = await ctx.vectorSearch("profiles", "by_embedding", { vector: d.embedding, limit: 256 });
+      await ctx.runMutation(internal.worker.setNeighbors, { id: d.id, neighbors: hits.map((h) => h._score).filter((s) => s < 0.9999) });
+    }
+    return ds.length;
   },
 });

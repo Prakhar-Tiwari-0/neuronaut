@@ -34,6 +34,7 @@ DISPLAY_PROMPTS = [  # daily puzzle prompts: never the profile prompts, so a car
     "Describe a sound you like.",
 ]
 PAR_DOSES = [0.4, 0.7, 1.0]
+NEIGHBOR_EVERY = 600  # sweep batches (~1.5 h) between refreshes of upcoming dailies' neighbor cosines
 
 
 def as_profile(p):
@@ -163,6 +164,9 @@ class Worker:
         added = self.call("mutation", "worker:putProfiles", jobIds=[], profiles=[as_profile(p) for p in res])
         open(path, "w").write(str(cur + len(chunk)))
         print(f"sweep {cur + len(chunk)}/{len(order)} (+{added}) {time.time() - t:.1f}s", flush=True)
+        done = cur + len(chunk) >= len(order)
+        if done or (cur // size + 1) % NEIGHBOR_EVERY == 0:  # daily ranks sharpen as coverage grows
+            print(f"refreshed neighbors of {self.call('action', 'worker:refreshNeighbors')} dailies", flush=True)
         return True
 
     def wait(self):
