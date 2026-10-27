@@ -101,6 +101,20 @@ describe("GPU budget", () => {
   });
 });
 
+describe("job queue", () => {
+  test("players' jobs are handed out first, and background work one job at a time", async () => {
+    const { t } = await setup();
+    await t.run(async (ctx) => {
+      for (const key of ["par:a", "par:b", "daily:c"]) await ctx.db.insert("jobs", { kind: "par", key, args: {}, priority: 1, status: "pending" });
+    });
+    const claim = () => t.mutation(api.worker.claim, { secret: SECRET, max: 24 });
+    expect((await claim()).length).toBe(1); // one par, not all three in one batch
+    await t.run((ctx) => ctx.db.insert("jobs", { kind: "profile", key: "profile:1:1", args: {}, priority: 0, status: "pending" }));
+    const next = await claim();
+    expect(next.map((j) => j.kind)).toEqual(["profile"]); // the player's scan jumps the remaining pars
+  });
+});
+
 // Today's daily: answer L5 N5 along axis 0; the ladder says 3 neurons were measured.
 async function withDaily(t: Awaited<ReturnType<typeof setup>>["t"], date = "2026-10-27") {
   await t.run(async (ctx) => {
