@@ -8,6 +8,11 @@ Built on [neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) by
 neuron index come from that project.
 
 <!-- sweep:start -->
+**Sweep progress** (every neuron in Qwen3.5-4B, measured once on a 4080 Super)
+
+`█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░` 6,304 / 294,912 (2.1%)
+
+About 10.8 h left at 134 ms per neuron, ETA 2026-10-27 17:54 UTC. Updated 2026-10-27 07:08 UTC.
 <!-- sweep:end -->
 
 ## Modes
