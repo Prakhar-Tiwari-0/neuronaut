@@ -3,36 +3,44 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { LensSearch } from "../components/LensSearch";
-import { Button, ErrorLine, Input, Label, NeuronInput, NeuronLink } from "../components/ui";
+import { Button, ErrorLine, Input, Label, NeuronInput, NeuronLink, Steps } from "../components/ui";
 import { until } from "../lib/format";
 import { errorText, useSession } from "../lib/session";
 
 export function Bounties() {
   const list = useQuery(api.bounties.list);
-  if (list === undefined) return <div className="py-20 text-center text-faint">loading</div>;
-  const groups = (["open", "upcoming", "closed"] as const).map((s) => [s, list.filter((b) => b.state === s)] as const);
+  const groups = (["open", "upcoming", "closed"] as const).map((st) => [st, (list ?? []).filter((b) => b.state === st)] as const);
   return (
-    <div>
-      <h1 className="font-pixel text-3xl">BOUNTIES</h1>
-      <p className="mt-3 max-w-[64ch] text-dim">
-        Steer the model toward a target with the neurons you find. The judge runs your push on prompts you never see and scores
-        how far the replies move toward the target while staying coherent. Smaller doses score more. Beat par, take the top
-        three.
-      </p>
+    <div className="space-y-10">
+      <div className="space-y-5">
+        <h1 className="font-pixel text-4xl">BOUNTIES</h1>
+        <Steps
+          steps={[
+            <>Pick a target, like making the model talk about the sea.</>,
+            <>Choose neurons and how hard to push each one (the dose).</>,
+            <>The judge scores how well it works. Beat par and finish top 3 for points.</>,
+          ]}
+        />
+      </div>
+      {list === undefined && <div className="py-10 text-center text-dim">Loading bounties…</div>}
       {groups.map(([state, bs]) =>
         bs.length ? (
-          <section key={state} className="mt-10">
-            <Label className="mb-2">{state}</Label>
-            <div className="border-t border-line">
+          <section key={state}>
+            <Label className="mb-3">{state === "open" ? "Open now" : state === "upcoming" ? "Coming up" : "Closed"}</Label>
+            <div className="grid gap-4 md:grid-cols-2">
               {bs.map((b) => (
-                <Link key={b.slug} to={`/b/${b.slug}`} className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-1 border-b border-line py-3 hover:bg-raised md:grid-cols-[180px_1fr_90px_80px_90px]">
-                  <span className="font-medium">{b.title}</span>
-                  <span className="hidden truncate text-dim md:block">{b.brief}</span>
-                  <span className="font-mono text-xs text-dim">{b.maxNeurons === 1 ? "1 neuron" : `${b.maxNeurons} neurons`}</span>
-                  <span className="text-right font-mono text-xs md:text-left">{b.par === null ? <span className="text-faint">par ?</span> : `par ${Math.round(b.par)}`}</span>
-                  <span className="col-start-2 row-start-1 text-right font-mono text-xs text-dim md:col-start-auto md:row-start-auto">
-                    {state === "open" ? `${until(b.endsAt)} left` : state === "upcoming" ? `in ${until(b.startsAt)}` : "closed"}
-                  </span>
+                <Link key={b.slug} to={`/b/${b.slug}`} className="press flex flex-col rounded-2xl border border-line bg-card p-5 hover:border-line-strong">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-xl font-semibold">{b.title}</span>
+                    <span className="shrink-0 font-mono text-sm text-dim">
+                      {state === "open" ? `${until(b.endsAt)} left` : state === "upcoming" ? `in ${until(b.startsAt)}` : "closed"}
+                    </span>
+                  </div>
+                  <p className="mt-2 flex-1 text-[15px] text-dim">{b.brief}</p>
+                  <div className="mt-4 flex gap-4 text-sm">
+                    <span className="rounded-lg bg-raised px-2.5 py-1">{b.maxNeurons === 1 ? "1 neuron" : `up to ${b.maxNeurons} neurons`}</span>
+                    <span className="rounded-lg bg-raised px-2.5 py-1 font-mono">{b.par === null ? "par being set" : `par ${Math.round(b.par)}`}</span>
+                  </div>
                 </Link>
               ))}
             </div>
@@ -76,13 +84,13 @@ export function Bounty() {
     <div className="grid gap-10 lg:grid-cols-[1fr_420px]">
       <section>
         <div className="flex items-baseline gap-4">
-          <h1 className="text-3xl font-medium tracking-tight">{b.title}</h1>
+          <h1 className="text-4xl font-semibold tracking-tight">{b.title}</h1>
           <span className="ml-auto font-mono text-xs text-dim">
             {b.state === "open" ? `${until(b.endsAt)} left` : b.state === "upcoming" ? `opens in ${until(b.startsAt)}` : "closed"}
           </span>
         </div>
-        <p className="mt-3 max-w-[60ch] text-[15px]">{b.brief}</p>
-        <div className="mt-4 flex gap-8 font-mono text-xs text-dim">
+        <p className="mt-3 max-w-[60ch] text-lg">{b.brief}</p>
+        <div className="mt-4 flex flex-wrap gap-x-8 gap-y-1 font-mono text-sm text-dim">
           <span>up to <span className="text-fg">{b.maxNeurons}</span> {b.maxNeurons === 1 ? "neuron" : "neurons"}</span>
           <span>par <span className="text-fg">{b.par === null ? "being set" : Math.round(b.par)}</span></span>
           <span>score = 1000 × concept × coherence × efficiency</span>
@@ -93,7 +101,7 @@ export function Bounty() {
           {b.leaderboard.length === 0 ? (
             <div className="text-dim">No scored entries yet.</div>
           ) : (
-            <table className="w-full text-left font-mono text-xs">
+            <table className="w-full text-left font-mono text-sm">
               <tbody>
                 {b.leaderboard.map((e, i) => (
                   <tr key={i} className={`border-t border-line align-top ${e.you ? "text-fg" : ""}`}>
@@ -105,7 +113,7 @@ export function Bounty() {
                         <div className="mt-1 text-dim">
                           {e.pushes.map((p) => (
                             <span key={`${p.layer}:${p.n}`} className="mr-3">
-                              <NeuronLink layer={p.layer} n={p.n} className="text-[11px]" /> ×{p.dose}
+                              <NeuronLink layer={p.layer} n={p.n} className="text-xs" /> ×{p.dose}
                             </span>
                           ))}
                         </div>
@@ -127,7 +135,7 @@ export function Bounty() {
             <div className="border-t border-line">
               {b.mine.map((e, i) => (
                 <div key={i} className="border-b border-line py-2">
-                  <button className="flex w-full items-baseline gap-4 text-left font-mono text-xs" onClick={() => setOpen(open === i ? null : i)}>
+                  <button className="flex w-full flex-wrap items-baseline gap-x-4 gap-y-1 text-left font-mono text-sm" onClick={() => setOpen(open === i ? null : i)}>
                     <span className="flex-1">
                       {e.pushes.map((p) => (
                         <span key={`${p.layer}:${p.n}`} className="mr-3">
@@ -169,14 +177,14 @@ export function Bounty() {
           >
             <div className="flex items-center justify-between">
               <Label>Enter</Label>
-              <span className="font-mono text-xs text-dim">{b.entriesLeft} entries left</span>
+              <span className="font-mono text-sm text-dim">{b.entriesLeft} entries left</span>
             </div>
             <div className="mt-2 space-y-2">
               {rows.map((r, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <NeuronInput layer={r.layer} n={r.n} onLayer={(v) => setRow(i, { layer: v })} onN={(v) => setRow(i, { n: v })} />
-                  <span className="font-mono text-xs text-faint">×</span>
-                  <Input value={r.dose} onChange={(e) => setRow(i, { dose: e.target.value })} className="w-16 font-mono" inputMode="decimal" aria-label="dose" />
+                  <span className="font-mono text-faint">×</span>
+                  <Input value={r.dose} onChange={(e) => setRow(i, { dose: e.target.value })} className="w-20 text-center font-mono" inputMode="decimal" aria-label="dose" />
                   {rows.length > 1 && (
                     <button type="button" className="font-mono text-xs text-faint hover:text-fg" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
                       remove

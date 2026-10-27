@@ -4,9 +4,14 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="A game played inside a language model. Catch rare neurons, find the daily neuron, win bounties by steering." />
-    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="A game played inside a language model. Find the hidden neuron of the day, catch rare neurons, win bounties by steering." />
+    <meta name="theme-color" content="#f7f5f0" />
     <title>Neuronaut</title>
+    <link rel="preconnect" href="%VITE_CONVEX_URL%" crossorigin />
+    <script>
+      // Light by default; dark only if the player picked it. Runs before first paint, so there's no flash.
+      if (localStorage.getItem("neuronaut:theme") === "dark") document.documentElement.classList.add("dark");
+    </script>
   </head>
   <body>
     <div id="root"></div>

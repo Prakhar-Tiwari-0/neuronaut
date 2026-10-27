@@ -52,6 +52,7 @@ function convex(fn, args) {
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
+await page.addInitScript(() => localStorage.setItem("neuronaut:seen-howto", "1")); // the first-visit how-to card
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 
@@ -116,8 +117,8 @@ try {
       await page.getByRole("button", { name: "Guess", exact: true }).click();
       await page.waitForFunction(() => !document.querySelector('input[aria-label="neuron"]')?.value);  // guess landed
     }
-    await page.waitForFunction(() => document.querySelectorAll("tbody tr").length >= 2 && !document.body.innerText.includes("measuring"), null, { timeout: 120000 });
-    return { rows: await page.locator("tbody tr").allInnerTexts() };
+    await page.waitForFunction(() => document.querySelectorAll("[data-guess]").length >= 2 && !document.body.innerText.includes("measuring"), null, { timeout: 120000 });
+    return { rows: (await page.locator("[data-guess]").allInnerTexts()).map((r) => r.replace(/\s+/g, " ")) };
   });
 
   await step("daily: solve", async () => {
@@ -126,7 +127,9 @@ try {
     await page.getByLabel("layer", { exact: true }).fill(String(ans.layer));
     await page.getByLabel("neuron").fill(String(ans.n));
     await page.getByRole("button", { name: "Guess", exact: true }).click();
-    const solved = await page.getByText(/Solved in \d+/).textContent({ timeout: 60000 });
+    const solved = await page.getByText(/Solved in \d+/).first().textContent({ timeout: 60000 });
+    await page.getByRole("dialog", { name: "Today's result" }).waitFor(); // the result card opens by itself
+    await page.keyboard.press("Escape");
     return { answer: ans, solved };
   });
 

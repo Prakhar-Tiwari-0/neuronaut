@@ -197,7 +197,7 @@ export const overview = query({
       prompts: s?.prompts ?? [],
       baseline: s?.baseline ?? [],
       total: MODEL.layers * MODEL.width,
-      profiled: s?.profiled ?? 0,
+      profiled: Math.max(s?.profiled ?? 0, s?.swept ?? 0), // the sweep's store holds most measured neurons
       caught: s?.caught ?? 0,
       coverage: s?.coverage ?? [],
       recent: await Promise.all(

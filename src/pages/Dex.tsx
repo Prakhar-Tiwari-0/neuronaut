@@ -5,7 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { MODEL, RARITIES, type Rarity } from "../../convex/rules";
 import { Coverage } from "../components/Coverage";
 import { LensSearch } from "../components/LensSearch";
-import { Button, ErrorLine, Label, NeuronInput, NeuronLink, RarityTag, Tokens } from "../components/ui";
+import { Button, ErrorLine, Label, NeuronInput, NeuronLink, RarityTag, Steps, Tokens } from "../components/ui";
 import { ago, RARITY_COLOR } from "../lib/format";
 import { errorText, useSession } from "../lib/session";
 
@@ -37,57 +37,67 @@ export function Dex() {
 
   return (
     <div className="space-y-10">
-      <section className="grid gap-10 lg:grid-cols-[1fr_400px]">
-        <div>
-          <h1 className="font-pixel text-3xl">DEX</h1>
-          <div className="mt-3 flex gap-8 font-mono text-xs text-dim">
-            <span>
-              caught <span className="text-fg">{overview?.caught ?? 0}</span> / {(overview?.total ?? 0).toLocaleString()}
-            </span>
-            <span>
-              measured <span className="text-fg">{(overview?.profiled ?? 0).toLocaleString()}</span>
-            </span>
-          </div>
-          <div className="mt-6 overflow-x-auto">
-            <Coverage coverage={overview?.coverage ?? []} layers={MODEL.layers} bins={BINS} />
-          </div>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+          <h1 className="font-pixel text-4xl">DEX</h1>
+          <span className="text-dim">
+            {overview?.caught ?? 0} caught · {(overview?.profiled ?? 0).toLocaleString()} of {(overview?.total ?? 0).toLocaleString()} measured
+          </span>
         </div>
-        <div className="space-y-6">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              doScan(false);
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <Label>Scan</Label>
-              {me && <span className="font-mono text-xs text-dim">{me.scansLeft} left today</span>}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <NeuronInput layer={layer} n={n} onLayer={setLayer} onN={setN} />
-              <Button>Scan</Button>
-              <Button type="button" variant="ghost" onClick={() => doScan(true)}>
-                Random
-              </Button>
-            </div>
-            <div className="mt-1.5 min-h-4"><ErrorLine error={error} /></div>
-          </form>
-          <div>
-            <Label className="mb-2">Hunt</Label>
-            <LensSearch pickLabel="open" onPick={(l, nn) => nav(`/n/${l}/${nn}`)} />
+        <Steps
+          steps={[
+            <>Find a neuron: search a word below, or scan a random one.</>,
+            <>Scan it ({me ? `${me.scansLeft} left today` : "12 a day"}) to see what it does and how rare it is.</>,
+            <>Catch it to make it yours ({me ? `${me.catchesLeft} left today` : "3 a day"}). Rarer and more unique scores more.</>,
+          ]}
+        />
+      </div>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <form
+          className="rounded-2xl border border-line bg-card p-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            doScan(false);
+          }}
+        >
+          <Label>Scan a neuron</Label>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <NeuronInput layer={layer} n={n} onLayer={setLayer} onN={setN} />
+            <Button>Scan</Button>
           </div>
+          <div className="mt-4 flex items-center gap-3">
+            <Button type="button" variant="ghost" size="lg" className="flex-1" onClick={() => doScan(true)}>
+              Random
+            </Button>
+            <span className="text-sm text-dim">Don't know where to start? Try your luck.</span>
+          </div>
+          <div className="mt-2 min-h-5">
+            <ErrorLine error={error} />
+          </div>
+        </form>
+        <div className="rounded-2xl border border-line bg-card p-5">
+          <Label className="mb-3">Find neurons by word</Label>
+          <LensSearch pickLabel="Open" onPick={(l, nn) => nav(`/n/${l}/${nn}`)} />
+        </div>
+      </section>
+
+      <section>
+        <Label className="mb-3">The board: neurons caught so far, by layer</Label>
+        <div className="overflow-x-auto rounded-2xl border border-line bg-card p-4">
+          <Coverage coverage={overview?.coverage ?? []} layers={MODEL.layers} bins={BINS} />
         </div>
       </section>
 
       <section>
         <div className="flex flex-wrap items-center gap-x-5 border-b border-line">
           {(["caught", "seen"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`-mb-px whitespace-nowrap border-b py-2 text-[13px] ${tab === t ? "border-fg text-fg" : "border-transparent text-dim hover:text-fg"}`}>
+            <button key={t} onClick={() => setTab(t)} className={`-mb-px whitespace-nowrap border-b-2 py-3 text-base font-medium ${tab === t ? "border-fg text-fg" : "border-transparent text-dim hover:text-fg"}`}>
               {t === "caught" ? "Caught by everyone" : "Seen by you"}
             </button>
           ))}
           {tab === "caught" && (
-            <div className="flex w-full flex-wrap gap-x-3 gap-y-1 pb-2 font-pixel text-[11px] uppercase md:ml-auto md:w-auto md:pb-0">
+            <div className="flex w-full flex-wrap gap-x-3 gap-y-1 pb-2 font-pixel text-xs uppercase md:ml-auto md:w-auto md:pb-0">
               <button onClick={() => setRarity(undefined)} className={rarity ? "text-faint hover:text-fg" : "text-fg"}>
                 all
               </button>
@@ -111,19 +121,19 @@ function Caught({ rarity }: { rarity?: Rarity }) {
   if (!results.length) return <div className="py-6 text-dim">Nothing caught{rarity ? ` at ${rarity}` : ""} yet.</div>;
   return (
     <>
-      <table className="w-full text-left">
+      <table className="w-full text-left text-[15px]">
         <tbody>
           {results.map((c) => (
             <tr key={`${c.layer}:${c.n}`} className="border-b border-line align-baseline">
-              <td className="w-28 py-2"><NeuronLink layer={c.layer} n={c.n} /></td>
-              <td className="py-2 font-medium">{c.name}</td>
-              <td className="w-28 py-2"><RarityTag rarity={c.rarity} /></td>
-              <td className="hidden py-2 text-dim md:table-cell"><Tokens tokens={c.words} /></td>
-              <td className="hidden w-28 py-2 font-mono text-xs sm:table-cell">
+              <td className="w-28 py-3"><NeuronLink layer={c.layer} n={c.n} /></td>
+              <td className="py-3 font-medium">{c.name}</td>
+              <td className="w-28 py-3"><RarityTag rarity={c.rarity} /></td>
+              <td className="hidden py-3 text-dim md:table-cell"><Tokens tokens={c.words} /></td>
+              <td className="hidden w-28 py-3 font-mono text-xs sm:table-cell">
                 <Link to={`/t/${c.handle}`} className="hover:underline underline-offset-4">{c.handle}</Link>
               </td>
-              <td className="w-14 py-2 text-right font-mono text-xs">{c.points}</td>
-              <td className="w-12 py-2 text-right font-mono text-xs text-faint">{ago(c.at)}</td>
+              <td className="w-14 py-3 text-right font-mono text-xs">{c.points}</td>
+              <td className="w-12 py-3 text-right font-mono text-xs text-faint">{ago(c.at)}</td>
             </tr>
           ))}
         </tbody>
@@ -143,15 +153,15 @@ function Seen({ signedIn }: { signedIn: boolean }) {
   if (seen === undefined) return <div className="py-6 text-faint">loading</div>;
   if (!seen.length) return <div className="py-6 text-dim">You haven't scanned anything yet.</div>;
   return (
-    <table className="w-full text-left">
+    <table className="w-full text-left text-[15px]">
       <tbody>
         {seen.map((s) => (
           <tr key={`${s.layer}:${s.n}`} className="border-b border-line align-baseline">
-            <td className="w-28 py-2"><NeuronLink layer={s.layer} n={s.n} /></td>
-            <td className="w-32 py-2">{s.rarity ? <RarityTag rarity={s.rarity} /> : <span className="font-mono text-xs text-faint">measuring</span>}</td>
-            <td className="py-2 text-dim"><Tokens tokens={s.words} /></td>
-            <td className="w-20 py-2 font-mono text-xs text-faint">{s.source === "guess" ? "guessed" : "scanned"}</td>
-            <td className="w-20 py-2 text-right font-mono text-xs">
+            <td className="w-28 py-3"><NeuronLink layer={s.layer} n={s.n} /></td>
+            <td className="w-32 py-3">{s.rarity ? <RarityTag rarity={s.rarity} /> : <span className="font-mono text-xs text-faint">measuring</span>}</td>
+            <td className="py-3 text-dim"><Tokens tokens={s.words} /></td>
+            <td className="w-20 py-3 font-mono text-xs text-faint">{s.source === "guess" ? "guessed" : "scanned"}</td>
+            <td className="w-20 py-3 text-right font-mono text-xs">
               {s.caughtBy === "you" ? <span className="text-good">yours</span> : s.caughtBy ? <span className="text-faint">taken</span> : ""}
             </td>
           </tr>
