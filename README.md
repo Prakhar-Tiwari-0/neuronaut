@@ -5,7 +5,7 @@ talking about the sea, turn into a doctor, or fall apart. Most do almost nothing
 don't.
 
 Built on [neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) by
-[lyramakesmusic](https://github.com/lyramakesmusic), used with permission. The steering method, the steer lens and the
+[lyramakesmusic](https://github.com/lyramakesmusic). The steering method, the steer lens and the
 neuron index come from there.
 
 <!-- sweep:start -->
