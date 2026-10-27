@@ -27,7 +27,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const clerk = useClerk();
   const me = useQuery(api.players.me, isAuthenticated ? {} : "skip");
   const join = useMutation(api.players.join);
-  const [pending, setPending] = useState<((ok: boolean) => void) | null>(null);
+  // Every action waiting on a handle, not just the latest: they all settle together when the dialog closes.
+  const joiners = useRef(new Set<(ok: boolean) => void>());
+  const [asking, setAsking] = useState(false);
 
   // Right after a page load Convex hasn't confirmed the Clerk session yet, and the player row is still loading. A click
   // in that window must wait, not be read as "signed out" (Clerk ignores openSignIn for a signed-in user, so the
@@ -50,17 +52,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       clerk.openSignIn();
       return false;
     }
-    return new Promise<boolean>((resolve) => setPending(() => resolve));
+    setAsking(true);
+    return new Promise<boolean>((resolve) => joiners.current.add(resolve));
   }, [settled, clerk]);
+
+  const finish = useCallback((ok: boolean) => {
+    const waiting = [...joiners.current];
+    joiners.current.clear();
+    setAsking(false);
+    waiting.forEach((resolve) => resolve(ok));
+  }, []);
 
   // Ask for a handle as soon as a new user signs in, not on their first action.
   useEffect(() => {
-    if (isAuthenticated && me === null) setPending((p: ((ok: boolean) => void) | null) => p ?? (() => {}));
+    if (isAuthenticated && me === null) setAsking(true);
   }, [isAuthenticated, me]);
 
-  const finish = (ok: boolean) => {
-    pending?.(ok);
-    setPending(null);
+  // Signing out (here or in another tab) drops whatever was waiting on a handle.
+  useEffect(() => {
+    if (settled && !isAuthenticated && joiners.current.size) finish(false);
+  }, [settled, isAuthenticated, finish]);
+
+  const signOut = () => {
+    finish(false);
+    clerk.signOut();
   };
 
   return (
@@ -70,17 +85,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         me: isAuthenticated ? me : null,
         requireJoin,
         signIn: () => clerk.openSignIn(),
-        signOut: () => clerk.signOut(),
+        signOut,
       }}
     >
       {children}
-      {pending && isAuthenticated && me === null && (
+      {asking && isAuthenticated && me === null && (
         <JoinDialog
           onJoin={async (handle) => {
             await join({ handle });
             finish(true);
           }}
           onClose={() => finish(false)}
+          onSignOut={signOut}
         />
       )}
     </Ctx.Provider>
