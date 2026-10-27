@@ -69,19 +69,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (isAuthenticated && me === null) setAsking(true);
   }, [isAuthenticated, me]);
 
-  // A handle picked in another tab releases the actions waiting here.
-  useEffect(() => {
-    if (me && joiners.current.size) finish(true);
-  }, [me, finish]);
-
-  // Signing out, here or in another tab, drops whatever was waiting on a handle. So does switching to another
-  // account: its actions belong to the account that started them.
+  // Settle actions waiting on a handle from outside the dialog. One effect, checked in this order: a switch to another
+  // account drops them (they belong to the account that started them, and its player can appear in the same render),
+  // signing out drops them, and a handle picked in another tab releases them.
   const lastSession = useRef(sessionId);
   useEffect(() => {
     const switched = lastSession.current != null && sessionId !== lastSession.current;
     lastSession.current = sessionId;
-    if (joiners.current.size && (switched || (settled && !isAuthenticated))) finish(false);
-  }, [sessionId, settled, isAuthenticated, finish]);
+    if (!joiners.current.size) return;
+    if (switched || (settled && !isAuthenticated)) finish(false);
+    else if (me) finish(true);
+  }, [sessionId, settled, isAuthenticated, me, finish]);
 
   const signOut = () => {
     finish(false);
