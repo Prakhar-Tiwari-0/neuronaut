@@ -1,0 +1,12 @@
+node_modules
+dist
+.env.local
+.env*.local
+.tmp
+logs
+data
+worker/.venv
+worker/cache
+worker/__pycache__
+e2e/artifacts
+*.log

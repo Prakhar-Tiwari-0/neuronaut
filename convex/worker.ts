@@ -1,0 +1,145 @@
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { action, internalMutation, mutation, query } from "./_generated/server";
+import { resolvePending } from "./daily";
+import { bumpStats } from "./jobs";
+import { checkWorker, neuronKey, rarity } from "./lib";
+import { push } from "./schema";
+
+// The GPU worker's API (worker/main.py). Every call carries WORKER_SECRET.
+
+const STALE_MS = 10 * 60 * 1000; // a running job older than this is assumed lost and handed out again
+
+const profile = v.object({
+  layer: v.number(),
+  n: v.number(),
+  texts: v.array(v.string()),
+  words: v.array(v.string()),
+  z: v.number(),
+  nll: v.number(),
+  distinct: v.number(),
+  embedding: v.array(v.float64()),
+});
+
+// How many jobs are waiting; the worker subscribes to this instead of polling.
+export const pending = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkWorker(secret);
+    return (await ctx.db.query("jobs").withIndex("by_status_priority", (q) => q.eq("status", "pending")).take(100)).length;
+  },
+});
+
+export const claim = mutation({
+  args: { secret: v.string(), max: v.number() },
+  handler: async (ctx, { secret, max }) => {
+    checkWorker(secret);
+    const now = Date.now();
+    for (const j of await ctx.db.query("jobs").withIndex("by_status_priority", (q) => q.eq("status", "running")).collect())
+      if ((j.startedAt ?? 0) < now - STALE_MS) await ctx.db.patch(j._id, { status: "pending" });
+    const jobs = await ctx.db.query("jobs").withIndex("by_status_priority", (q) => q.eq("status", "pending")).take(max);
+    for (const j of jobs) await ctx.db.patch(j._id, { status: "running", startedAt: now });
+    return jobs.map((j) => ({ id: j._id, kind: j.kind, args: j.args }));
+  },
+});
+
+export const fail = mutation({
+  args: { secret: v.string(), id: v.id("jobs"), error: v.string() },
+  handler: async (ctx, { secret, id, error }) => {
+    checkWorker(secret);
+    const job = await ctx.db.get(id);
+    if (!job) return;
+    await ctx.db.patch(id, { status: "failed", error: error.slice(0, 2000) });
+    if (job.kind === "judge") await ctx.db.patch(job.args.entryId as Id<"entries">, { status: "failed" });
+  },
+});
+
+// Stores measured neurons (from jobs or the sweep), scores guesses that were waiting on them, closes the jobs.
+export const putProfiles = mutation({
+  args: { secret: v.string(), jobIds: v.array(v.id("jobs")), profiles: v.array(profile) },
+  handler: async (ctx, { secret, jobIds, profiles }) => {
+    checkWorker(secret);
+    let added = 0;
+    for (const p of profiles) {
+      const key = neuronKey(p.layer, p.n);
+      if (await ctx.db.query("profiles").withIndex("by_key", (q) => q.eq("key", key)).unique()) continue;
+      await ctx.db.insert("profiles", { ...p, key, rarity: rarity(p.z, p.nll, p.distinct), caught: false });
+      await resolvePending(ctx, key, p.embedding);
+      added++;
+    }
+    if (added) await bumpStats(ctx, { profiled: added });
+    for (const id of jobIds) await ctx.db.patch(id, { status: "done" });
+    return added;
+  },
+});
+
+export const finishJudge = mutation({
+  args: {
+    secret: v.string(),
+    id: v.id("jobs"),
+    entryId: v.id("entries"),
+    score: v.number(),
+    concept: v.number(),
+    coherence: v.number(),
+    texts: v.array(v.string()),
+  },
+  handler: async (ctx, { secret, id, entryId, ...result }) => {
+    checkWorker(secret);
+    await ctx.db.patch(entryId, { status: "done", ...result });
+    await ctx.db.patch(id, { status: "done" });
+  },
+});
+
+export const putPar = mutation({
+  args: { secret: v.string(), id: v.id("jobs"), slug: v.string(), score: v.number(), pushes: v.array(push) },
+  handler: async (ctx, { secret, id, slug, score, pushes }) => {
+    checkWorker(secret);
+    const b = await ctx.db.query("bounties").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
+    if (b) await ctx.db.patch(b._id, { par: { score, pushes } });
+    await ctx.db.patch(id, { status: "done" });
+  },
+});
+
+// The nearest measured neurons to an embedding (cosines, descending), for the daily generator's ambiguity check.
+export const nearest = action({
+  args: { secret: v.string(), embedding: v.array(v.float64()), limit: v.number() },
+  handler: async (ctx, { secret, embedding, limit }) => {
+    checkWorker(secret);
+    const hits = await ctx.vectorSearch("profiles", "by_embedding", { vector: embedding, limit });
+    return hits.map((h) => h._score);
+  },
+});
+
+const dailyArgs = {
+  id: v.id("jobs"),
+  date: v.string(),
+  layer: v.number(),
+  n: v.number(),
+  prompts: v.array(v.string()),
+  texts: v.array(v.string()),
+  baseline: v.array(v.string()),
+  embedding: v.array(v.float64()),
+  band: v.array(v.number()),
+  hint: v.string(),
+};
+
+// Stores a generated puzzle along with the cosines of the answer's 256 nearest measured neurons (for guess ranks).
+export const putDaily = action({
+  args: { secret: v.string(), ...dailyArgs },
+  handler: async (ctx, { secret, ...d }) => {
+    checkWorker(secret);
+    const key = neuronKey(d.layer, d.n);
+    const hits = await ctx.vectorSearch("profiles", "by_embedding", { vector: d.embedding, limit: 256 });
+    const neighbors = hits.map((h) => h._score).filter((s) => s < 0.9999);
+    await ctx.runMutation(internal.worker.insertDaily, { ...d, key, neighbors });
+  },
+});
+
+export const insertDaily = internalMutation({
+  args: { ...dailyArgs, key: v.string(), neighbors: v.array(v.number()) },
+  handler: async (ctx, { id, ...d }) => {
+    if (!(await ctx.db.query("dailies").withIndex("by_date", (q) => q.eq("date", d.date)).unique())) await ctx.db.insert("dailies", d);
+    await ctx.db.patch(id, { status: "done" });
+  },
+});

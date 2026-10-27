@@ -1,0 +1,259 @@
+"""The GPU side of the game: steered generation and the measurements every mode scores with.
+
+    eng = Engine("Qwen/Qwen3.5-4B")
+    texts = eng.generate(prompt, [eng.push(14, 2742, 0.6)] * 2)     # one row per push list, all on the same prompt
+    prof = eng.profile([(14, 2742), (3, 10)])                       # cards: texts, rarity, embedding
+
+A push adds dose x (the layer's median residual norm) along a neuron's unit write direction at the MLP output, at every
+position: the explorer's `add` steering. Rows of one generate call share a prompt, so nothing is padded on the left
+(Qwen3.5's linear attention would carry padding into its state).
+
+Embedding: the unsteered model reads prompt + response and we mean-pool the response's hidden states at EMB_LAYER,
+z-scored per dimension on reference text (so the few massive-activation dimensions don't dominate). A neuron's shift is
+its steered pool minus the unsteered pool, averaged over prompts, minus the mean shift random directions cause at the
+same layer and dose. Cosine between shifts is how similar two neurons' effects are; the shift's size against random
+directions is the neuron's strength.
+"""
+import hashlib
+import json
+import os
+import re
+from collections import Counter
+
+import numpy as np
+import torch
+
+from spec import Spec
+
+PROFILE_PROMPTS = ["Who are you?", "Describe your perfect day.", "Tell me a short story.", "What should I cook tonight?"]
+PROFILE_DOSE = 0.6
+MAX_NEW = 40
+EMB_DIM = 256  # stored embeddings: a fixed random projection of the shift (cosine survives it to about +-0.06)
+N_CONTROLS = 48
+REFERENCE_TEXT = (
+    "The history of the city goes back to a small fishing village on the river. Over the centuries it grew into a "
+    "trading port, and by the nineteenth century factories lined both banks. Today most of the old warehouses are "
+    "apartments and the harbour is a park. Ask anyone who lives there what they like about it and they will tell you "
+    "about the food, the markets on Sunday mornings, and the long walks along the water when the weather is good."
+)
+STOP = set("""a an the and or but if then so to of in on at by for with from as is are was were be been being it its
+this that these those i you he she we they me him her us them my your his our their mine yours what which who whom whose
+when where why how not no yes do does did done have has had having can could will would shall should may might must just
+very really also too there here about into over under up down out off again more most some any all each every other such
+only own same than s t don't i'm it's you're i'll i've let's like get got one two well""".split())
+WORD = re.compile(r"[a-zA-Z][a-zA-Z'-]{2,}")
+
+
+def distinct2(ids):
+    pairs = list(zip(ids, ids[1:]))
+    return len(set(pairs)) / len(pairs) if pairs else 0.0
+
+
+def words(text):
+    return [w.lower() for w in WORD.findall(text) if w.lower() not in STOP]
+
+
+class Engine:
+    def __init__(self, model, device="cuda"):
+        self.sp = sp = Spec.load(model, device)
+        self.tok, self.dev = sp.tok, sp.device
+        self.L = sp.n_layers
+        self.emb_layer = (2 * self.L) // 3
+        self.stop = sp.stop_ids()
+        self._push = {}  # layer -> [rows, hidden] added to that layer's MLP branch output
+        self._cap = None  # set to capture the EMB_LAYER residual
+        for i in range(self.L):
+            sp.branch(i).register_forward_hook(self._branch_hook(i))
+        sp.layers[self.emb_layer].register_forward_hook(self._cap_hook)
+        self._units = {}
+        g = torch.Generator().manual_seed(0)
+        H = sp.cfg.hidden_size
+        self.proj = (torch.randn(H, EMB_DIM, generator=g) / EMB_DIM ** 0.5).to(self.dev)
+        self._reference()
+        self.base = self._baseline(PROFILE_PROMPTS)
+        self._load_controls(model)
+
+    # ---------- hooks ----------
+    def _branch_hook(self, i):
+        def hook(mod, inp, out):
+            v = self._push.get(i)
+            if v is not None:
+                return out + v[:, None, :].to(out.dtype)
+        return hook
+
+    def _cap_hook(self, mod, inp, out):
+        if self._cap is not None:
+            self._cap.append(out[0] if isinstance(out, tuple) else out)
+
+    def _resid_all(self, ids):
+        caps = {}
+        hs = [self.sp.layers[i].register_forward_hook(
+            lambda m, inp, out, i=i: caps.__setitem__(i, (out[0] if isinstance(out, tuple) else out)[0].float()))
+              for i in range(self.L)]
+        try:
+            with torch.inference_mode():
+                self.sp.lm(input_ids=ids, use_cache=False)
+        finally:
+            for h in hs:
+                h.remove()
+        return caps
+
+    def _reference(self):
+        """Median residual norm leaving each layer (the dose unit) and per-dimension stats at EMB_LAYER."""
+        ids = self.tok(REFERENCE_TEXT, return_tensors="pt").input_ids.to(self.dev)
+        caps = self._resid_all(ids)
+        self.norms = [float(caps[i][1:].norm(dim=-1).median()) / self.sp.out_scale(i) for i in range(self.L)]
+        h = caps[self.emb_layer][1:]
+        self.mu, self.sd = h.mean(0), h.std(0).clamp(min=1e-3)
+
+    def unit(self, layer):
+        if layer not in self._units:
+            W = self.sp.write_cols(layer)
+            self._units[layer] = (W / W.norm(dim=0)).T.contiguous()  # [N, hidden]
+        return self._units[layer]
+
+    def push(self, layer, n, dose):
+        """One push as (layer, vector): dose median residual norms along neuron n's write direction."""
+        return layer, dose * self.norms[layer] * self.unit(layer)[n]
+
+    # ---------- generation ----------
+    def chat(self, prompt):
+        return self.sp.chat_ids([{"role": "user", "content": prompt}])
+
+    def generate(self, prompt, rows, max_new=MAX_NEW):
+        """Greedy-decodes `prompt` once per row; rows[i] is a list of pushes (layer, vector), [] for unsteered.
+        Returns per row (text, token ids)."""
+        q = self.chat(prompt)
+        R = len(rows)
+        H = self.sp.cfg.hidden_size
+        push = {}
+        for r, ps in enumerate(rows):
+            for layer, v in ps:
+                push.setdefault(layer, torch.zeros(R, H, device=self.dev))[r] += v
+        ids = torch.tensor([q] * R, device=self.dev)
+        out_ids, done = [[] for _ in range(R)], [False] * R
+        self._push = push
+        try:
+            with torch.inference_mode():
+                out = self.sp.model(input_ids=ids, use_cache=True, logits_to_keep=1)
+                for _ in range(max_new):
+                    nxt = out.logits[:, -1].argmax(-1)
+                    for r, t in enumerate(nxt.tolist()):
+                        if not done[r]:
+                            if t in self.stop:
+                                done[r] = True
+                            else:
+                                out_ids[r].append(t)
+                    if all(done):
+                        break
+                    out = self.sp.model(input_ids=nxt[:, None], past_key_values=out.past_key_values, use_cache=True,
+                                        logits_to_keep=1)
+        finally:
+            self._push = {}
+        return [(self.tok.decode(o, skip_special_tokens=True).strip(), o) for o in out_ids]
+
+    def read(self, prompt, responses):
+        """The unsteered model reads prompt + each response: the response's pooled z-scored hidden state at
+        EMB_LAYER [R, hidden] and its mean token NLL [R]. Responses are right-padded (causal, so harmless)."""
+        q = self.chat(prompt)
+        P = len(q)
+        resp = [r if r else [self.tok.eos_token_id or 0] for r in responses]
+        T = P + max(map(len, resp))
+        pad = self.tok.pad_token_id if self.tok.pad_token_id is not None else 0
+        ids = torch.tensor([q + r + [pad] * (T - P - len(r)) for r in resp], device=self.dev)
+        m = torch.zeros(len(resp), T, device=self.dev)
+        for i, r in enumerate(resp):
+            m[i, P:P + len(r)] = 1
+        self._cap = []
+        try:
+            with torch.inference_mode():
+                last = self.sp.lm(input_ids=ids, use_cache=False).last_hidden_state
+                nll = torch.stack([  # one row's logits at a time: the full [R, T, vocab] would not fit
+                    torch.nn.functional.cross_entropy(self.sp.lm_head(last[i, P - 1:P - 1 + len(r)]).float(),
+                                                      ids[i, P:P + len(r)]) for i, r in enumerate(resp)])
+        finally:
+            h, self._cap = self._cap[0].float(), None
+        z = (h - self.mu) / self.sd
+        pooled = (z * m[..., None]).sum(1) / m.sum(1, keepdim=True)
+        return pooled, nll
+
+    def _baseline(self, prompts):
+        """Unsteered responses to prompts with their pools and NLLs."""
+        out = []
+        for p in prompts:
+            (text, ids), = self.generate(p, [[]])
+            pooled, nll = self.read(p, [ids])
+            out.append({"prompt": p, "text": text, "ids": ids, "pool": pooled[0], "nll": float(nll[0])})
+        return out
+
+    # ---------- measuring ----------
+    def measure(self, rows, base=None, generic=None):
+        """Runs each row (a push list) on every prompt and measures it against the unsteered baseline. Returns per
+        row: texts, raw shift [hidden], mean NLL, mean distinct-2, and words that appear more than in the baseline
+        (minus words random pushes produce anyway)."""
+        base = base or self.base
+        generic = self.generic if generic is None else generic
+        R = len(rows)
+        shifts = torch.zeros(R, self.sp.cfg.hidden_size, device=self.dev)
+        texts, nll, d2, wc = [[] for _ in range(R)], torch.zeros(R), np.zeros(R), [Counter() for _ in range(R)]
+        for b in base:
+            gen = self.generate(b["prompt"], rows)
+            pooled, n = self.read(b["prompt"], [g[1] for g in gen])
+            shifts += pooled - b["pool"]
+            nll += n.cpu()
+            bw = Counter(words(b["text"]))
+            for r, (text, ids) in enumerate(gen):
+                texts[r].append(text)
+                d2[r] += distinct2(ids)
+                wc[r].update({w: c for w, c in Counter(words(text)).items() if c > bw[w] and w not in generic})
+        k = len(base)
+        return [{"texts": texts[r], "shift": shifts[r] / k, "nll": float(nll[r] / k), "distinct": float(d2[r] / k),
+                 "words": [w for w, _ in wc[r].most_common(8)]} for r in range(R)]
+
+    def _load_controls(self, model):
+        """Random unit directions at PROFILE_DOSE, N_CONTROLS per layer, measured once and cached on disk: per layer the
+        mean shift they cause (subtracted from every neuron's) and the mean and spread of what is left (the strength
+        scale); across layers, the words random pushes produce anyway (dropped from a neuron's distinctive words)."""
+        key = hashlib.sha1(json.dumps([model, PROFILE_PROMPTS, PROFILE_DOSE, MAX_NEW, N_CONTROLS]).encode()).hexdigest()[:10]
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", f"controls-{key}.npz")
+        if not os.path.exists(path):
+            means, mus, sds, df = [], [], [], Counter()
+            for layer in range(self.L):
+                g = torch.Generator().manual_seed(1000 + layer)
+                V = torch.randn(N_CONTROLS, self.sp.cfg.hidden_size, generator=g).to(self.dev)
+                V = V / V.norm(dim=-1, keepdim=True)
+                m = self.measure([[(layer, PROFILE_DOSE * self.norms[layer] * v)] for v in V], generic=set())
+                S = torch.stack([x["shift"] for x in m])
+                means.append(S.mean(0).cpu().numpy())
+                s = (S - S.mean(0)).norm(dim=-1)
+                mus.append(float(s.mean()))
+                sds.append(float(s.std()))
+                for x in m:
+                    df.update(set(x["words"]))
+                print(f"controls L{layer}: strength {mus[-1]:.2f} +- {sds[-1]:.2f}", flush=True)
+            total = self.L * N_CONTROLS
+            generic = sorted(w for w, c in df.items() if c >= 0.03 * total)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            np.savez(path, mean=np.stack(means), mu=np.array(mus), sd=np.array(sds), generic=np.array(generic))
+        z = np.load(path)
+        self.ctrl_mean = torch.tensor(z["mean"], device=self.dev)
+        self.ctrl_mu, self.ctrl_sd = z["mu"].tolist(), z["sd"].tolist()
+        self.generic = set(z["generic"].tolist())
+
+    def embed(self, shift):
+        e = shift @ self.proj
+        return (e / e.norm().clamp(min=1e-6)).tolist()
+
+    def profile(self, neurons, batch=24):
+        """Card data for [(layer, n)]: texts on PROFILE_PROMPTS at PROFILE_DOSE, strength z against random directions,
+        NLL, distinct-2, distinctive words and the embedding."""
+        out = []
+        for s in range(0, len(neurons), batch):
+            chunk = neurons[s:s + batch]
+            ms = self.measure([[self.push(l, n, PROFILE_DOSE)] for l, n in chunk])
+            for (l, n), m in zip(chunk, ms):
+                c = m["shift"] - self.ctrl_mean[l]
+                z = (float(c.norm()) - self.ctrl_mu[l]) / max(self.ctrl_sd[l], 1e-6)
+                out.append({"layer": l, "n": n, "texts": m["texts"], "words": m["words"], "nll": m["nll"],
+                            "distinct": m["distinct"], "z": z, "shift": c, "embedding": self.embed(c)})
+        return out

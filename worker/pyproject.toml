@@ -1,0 +1,21 @@
+[project]
+name = "neurodex-worker"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "transformers",
+    "safetensors",
+    "numpy",
+    "accelerate",
+    "convex",
+    "flash-linear-attention>=0.6.0",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
