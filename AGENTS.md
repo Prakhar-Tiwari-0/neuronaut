@@ -12,3 +12,5 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) first. It applies to you too.
   sweep store). Backend: `bun run test`, which runs the real Convex functions through `convex-test`; don't hand-roll a
   fake Convex. Worker: `cd worker && uv run pytest`. Name each test after the failure it catches.
 - Checks before a PR: `bunx tsc -p convex --noEmit`, `bun run build`, `bun run lint`, `bun run test`.
+- After opening a PR, follow the [babysit-pr skill](.agents/skills/babysit-pr/SKILL.md) to watch review and CI. Never
+  write your own poll or sleep loop.
