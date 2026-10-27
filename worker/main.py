@@ -109,7 +109,10 @@ class Worker:
         rng = random.Random(a["date"])
         exclude = set(a.get("exclude", []))
         L, N = self.lens.kl.shape
-        strong = np.argwhere(self.lens.kl[3:L - 1] >= np.quantile(self.lens.kl, 0.9)) + [3, 0]
+        # spread answers over depth: each date draws a band, then the strongest 10% (steer KL) within it
+        lo, hi = rng.choice([(3, 10), (11, 18), (19, 25), (26, L - 2)])
+        band = self.lens.kl[lo:hi + 1]
+        strong = np.argwhere(band >= np.quantile(band, 0.9)) + [lo, 0]
         for attempt in range(6):
             pick = [tuple(map(int, strong[i])) for i in rng.sample(range(len(strong)), 64)]
             pick = [(l, n) for l, n in pick if f"{l}:{n}" not in exclude]
