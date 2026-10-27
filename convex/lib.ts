@@ -11,10 +11,12 @@ export const RARITIES = ["legendary", "epic", "rare", "uncommon", "common", "gli
 export type Rarity = (typeof RARITIES)[number];
 export const POINTS: Record<Rarity, number> = { legendary: 100, epic: 30, rare: 10, uncommon: 3, common: 1, glitch: 5 };
 
-// Strength z against random directions; thresholds set from a 2048-neuron calibration so roughly 0.5% are
-// legendary, 2% epic, 8% rare, 20% uncommon. A push that wrecks the text (high NLL or looping) is a glitch.
-const Z = { legendary: 40, epic: 20, rare: 8, uncommon: 3 };
-export const GLITCH = { nll: 3.2, distinct: 0.6 };
+// Strength z against random directions. From a 2048-neuron calibration (64 per layer), among coherent neurons about
+// 0.4% are legendary, 2% epic, 6% rare and 20% uncommon. A push that wrecks the text is a glitch: high NLL under the
+// unsteered model, or any reply that loops or comes back empty (worst prompt's distinct-2 under 0.5). Glitches are
+// common among the strongest pushes, and worth a little.
+const Z = { legendary: 12, epic: 7, rare: 3.5, uncommon: 1.5 };
+export const GLITCH = { nll: 3.2, distinct: 0.5 };
 
 export function rarity(z: number, nll: number, distinct: number): Rarity {
   if (nll > GLITCH.nll || distinct < GLITCH.distinct) return "glitch";

@@ -72,6 +72,7 @@ class Engine:
         self._reference()
         self.base = self._baseline(PROFILE_PROMPTS)
         self._load_controls(model)
+        self._targets = {}
 
     # ---------- hooks ----------
     def _branch_hook(self, i):
@@ -189,13 +190,13 @@ class Engine:
     # ---------- measuring ----------
     def measure(self, rows, base=None, generic=None):
         """Runs each row (a push list) on every prompt and measures it against the unsteered baseline. Returns per
-        row: texts, raw shift [hidden], mean NLL, mean distinct-2, and words that appear more than in the baseline
+        row: texts, raw shift [hidden], mean NLL, the worst prompt's distinct-2, and words that appear more than in the baseline
         (minus words random pushes produce anyway)."""
         base = base or self.base
         generic = self.generic if generic is None else generic
         R = len(rows)
         shifts = torch.zeros(R, self.sp.cfg.hidden_size, device=self.dev)
-        texts, nll, d2, wc = [[] for _ in range(R)], torch.zeros(R), np.zeros(R), [Counter() for _ in range(R)]
+        texts, nll, d2, wc = [[] for _ in range(R)], torch.zeros(R), np.ones(R), [Counter() for _ in range(R)]
         for b in base:
             gen = self.generate(b["prompt"], rows)
             pooled, n = self.read(b["prompt"], [g[1] for g in gen])
@@ -204,10 +205,10 @@ class Engine:
             bw = Counter(words(b["text"]))
             for r, (text, ids) in enumerate(gen):
                 texts[r].append(text)
-                d2[r] += distinct2(ids)
+                d2[r] = min(d2[r], distinct2(ids) if text else 0.0)  # an empty reply counts as fully looped
                 wc[r].update({w: c for w, c in Counter(words(text)).items() if c > bw[w] and w not in generic})
         k = len(base)
-        return [{"texts": texts[r], "shift": shifts[r] / k, "nll": float(nll[r] / k), "distinct": float(d2[r] / k),
+        return [{"texts": texts[r], "shift": shifts[r] / k, "nll": float(nll[r] / k), "distinct": float(d2[r]),
                  "words": [w for w, _ in wc[r].most_common(8)]} for r in range(R)]
 
     def _load_controls(self, model):
@@ -256,4 +257,36 @@ class Engine:
                 z = (float(c.norm()) - self.ctrl_mu[l]) / max(self.ctrl_sd[l], 1e-6)
                 out.append({"layer": l, "n": n, "texts": m["texts"], "words": m["words"], "nll": m["nll"],
                             "distinct": m["distinct"], "z": z, "shift": c, "embedding": self.embed(c)})
+        return out
+
+    # ---------- bounties ----------
+    def _target(self, prompts, anchors):
+        """Baseline and anchor shift for a bounty, cached: the shift in the unsteered model's reading when the reply
+        is an on-target anchor instead of its own answer, averaged over prompts and anchors."""
+        key = (tuple(prompts), tuple(anchors))
+        if key not in self._targets:
+            base = self._baseline(prompts)
+            ids = [self.tok(a, add_special_tokens=False).input_ids for a in anchors]
+            shift = torch.zeros(self.sp.cfg.hidden_size, device=self.dev)
+            for b in base:
+                pooled, _ = self.read(b["prompt"], ids)
+                shift += pooled.mean(0) - b["pool"]
+            self._targets[key] = (base, shift / len(base))
+        return self._targets[key]
+
+    def judge(self, entries, prompts, anchors):
+        """Scores bounty entries (each a list of (layer, n, dose)) on the hidden prompts.
+        concept = cosine between the entry's shift and the anchors' shift. coherence = 1 up to NLL 2.0, falling to 0
+        at 3.5, and 0 if the replies loop (distinct-2 under 0.6). efficiency = 1 up to a total dose of 0.5, then -0.25
+        per unit, floor 0.4. score = 1000 x max(concept, 0) x coherence x efficiency."""
+        base, target = self._target(prompts, anchors)
+        rows = [[self.push(l, n, d) for l, n, d in e] for e in entries]
+        out = []
+        for e, m in zip(entries, self.measure(rows, base=base)):
+            concept = float(torch.nn.functional.cosine_similarity(m["shift"], target, dim=0))
+            coherence = min(1.0, max(0.0, (3.5 - m["nll"]) / 1.5)) * (m["distinct"] >= 0.6)
+            dose = sum(abs(d) for _, _, d in e)
+            efficiency = min(1.0, max(0.4, 1 - 0.25 * (dose - 0.5)))
+            out.append({"score": round(1000 * max(concept, 0.0) * coherence * efficiency, 1), "concept": round(concept, 4),
+                        "coherence": round(coherence, 3), "texts": m["texts"]})
         return out
