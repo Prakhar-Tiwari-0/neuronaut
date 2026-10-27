@@ -2,7 +2,8 @@
 // sign in, pick a handle, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged. Also
 // checks that future puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
 //
-//   node e2e/game.mjs [--url http://127.0.0.1:5173]
+//   node e2e/game.mjs [--url http://127.0.0.1:5173]                                   # the local stack
+//   node e2e/game.mjs --url https://neuronaut-swart.vercel.app --deployment greedy-skunk-576   # a cloud deployment
 //
 // Signs in as a throwaway Clerk user (created through Clerk's backend API, deleted at the end), so it needs the dev
 // instance's keys in .env.clerk.local (`clerk env pull --file .env.clerk.local`).
@@ -16,10 +17,12 @@ import { clerk, clerkSetup } from "@clerk/testing/playwright";
 import { ConvexHttpClient } from "convex/browser";
 import { chromium } from "playwright";
 
-const url = process.argv.includes("--url") ? process.argv[process.argv.indexOf("--url") + 1] : "http://127.0.0.1:5173";
+const arg = (name) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
+const url = arg("--url") ?? "http://127.0.0.1:5173";
+const deployment = arg("--deployment"); // unset: the local anonymous backend
 const out = join("e2e", "artifacts", new Date().toISOString().replace(/[:.]/g, "-"));
 mkdirSync(out, { recursive: true });
-const report = { url, steps: [] };
+const report = { url, deployment: deployment ?? "local", steps: [] };
 const handle = `e2e_${Math.random().toString(36).slice(2, 8)}`;
 
 const keys = Object.fromEntries(
@@ -41,8 +44,9 @@ await clerkSetup();
 const user = await clerkApi("POST", "/users", { email_address: [email], skip_password_requirement: true });
 
 function convex(fn, args) {
-  const env = { ...process.env, CONVEX_AGENT_MODE: "anonymous", CONVEX_TMPDIR: join(process.cwd(), ".tmp") };
-  const out = execFileSync("bunx", ["convex", "run", fn, JSON.stringify(args)], { env, encoding: "utf8" }).trim();
+  const env = deployment ? process.env : { ...process.env, CONVEX_AGENT_MODE: "anonymous", CONVEX_TMPDIR: join(process.cwd(), ".tmp") };
+  const where = deployment ? ["--deployment", deployment] : [];
+  const out = execFileSync("bunx", ["convex", "run", ...where, fn, JSON.stringify(args)], { env, encoding: "utf8" }).trim();
   return out ? JSON.parse(out) : null; // a null result prints nothing
 }
 
@@ -148,7 +152,9 @@ try {
 
   await step("NaN bounty dose is refused", async () => {
     // the browser client can send NaN (Convex float64 allows it), so call the backend the same way the app does
-    const envUrl = readFileSync(".env.local", "utf8").match(/^VITE_CONVEX_URL=(.*)$/m)[1].trim();
+    const envUrl = deployment
+      ? `https://${deployment}.convex.cloud`
+      : readFileSync(".env.local", "utf8").match(/^VITE_CONVEX_URL=(.*)$/m)[1].trim();
     const jwt = await page.evaluate(() => window.Clerk.session.getToken({ template: "convex" }));
     const client = new ConvexHttpClient(envUrl);
     client.setAuth(jwt);

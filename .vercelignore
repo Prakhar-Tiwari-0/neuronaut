@@ -1,0 +1,11 @@
+# Only the web app deploys to Vercel; the worker, its data and local state stay on the GPU box.
+worker
+data
+logs
+e2e
+scratch
+.tmp
+.convex
+.pytest_cache
+dist
+*.log

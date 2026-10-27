@@ -4,6 +4,7 @@
 #
 #   ./up.sh            # start (or restart) everything
 #   ./up.sh stop       # stop everything
+#   WORKER_ENV=.env.prod.local ./up.sh    # the worker serves the deployment in worker/.env.prod.local instead
 #   systemctl --user status 'neuronaut-*'
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -13,6 +14,11 @@ UNITS=(neuronaut-convex neuronaut-vite neuronaut-worker neuronaut-readme)
 for u in "${UNITS[@]}"; do
   systemctl --user stop "$u" 2>/dev/null || true
   systemctl --user reset-failed "$u" 2>/dev/null || true
+done
+# a stopped transient unit lingers for a moment; starting one with the same name before it's gone fails
+for _ in $(seq 40); do
+  systemctl --user list-units --all --no-legend "${UNITS[@]}" | grep -q . || break
+  sleep 0.5
 done
 [[ "${1:-}" == stop ]] && exit 0
 
@@ -29,6 +35,6 @@ run() {  # unit, working dir, command...
 
 run neuronaut-convex "$ROOT" env CONVEX_AGENT_MODE=anonymous CONVEX_TMPDIR="$ROOT/.tmp" bunx convex dev --tail-logs always
 run neuronaut-vite "$ROOT" bunx vite --port 5173 --host 127.0.0.1
-run neuronaut-worker "$ROOT/worker" bash -c 'set -a; . ./.env.local; set +a; exec uv run python main.py --sweep'
+run neuronaut-worker "$ROOT/worker" bash -c "set -a; . ./${WORKER_ENV:-.env.local}; set +a; exec uv run python main.py --sweep"
 run neuronaut-readme "$ROOT" python3 worker/readme_progress.py
 systemctl --user --no-pager list-units 'neuronaut-*'
