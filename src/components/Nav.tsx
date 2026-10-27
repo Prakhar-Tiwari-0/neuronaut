@@ -75,9 +75,14 @@ export function Nav() {
               </button>
             </div>
           ) : signedIn ? (
-            <button className="press ml-2 h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg" onClick={() => requireJoin()}>
-              Pick a handle
-            </button>
+            <div className="ml-2 flex items-center gap-3 text-sm">
+              <button className="press h-10 rounded-xl bg-accent px-4 font-semibold text-accent-fg" onClick={() => requireJoin()}>
+                Pick a handle
+              </button>
+              <button className="text-dim hover:text-fg" onClick={signOut}>
+                Sign out
+              </button>
+            </div>
           ) : (
             <button className="press ml-2 h-10 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg" onClick={signIn}>
               Sign in
