@@ -38,11 +38,11 @@ export function Dex() {
   return (
     <div className="space-y-10">
       <div className="space-y-5">
-        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <div>
           <h1 className="font-pixel text-4xl">DEX</h1>
-          <span className="text-dim">
-            {overview?.caught ?? 0} caught · {(overview?.profiled ?? 0).toLocaleString()} of {(overview?.total ?? 0).toLocaleString()} measured
-          </span>
+          <div className="mt-1 h-6 text-dim">
+            {overview ? `${overview.caught} caught · ${overview.profiled.toLocaleString()} of ${overview.total.toLocaleString()} measured` : "\u00a0"}
+          </div>
         </div>
         <Steps
           steps={[

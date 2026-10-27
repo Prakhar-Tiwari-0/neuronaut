@@ -60,7 +60,7 @@ createRoot(document.getElementById("root")!).render(
         <BrowserRouter>
           <SessionProvider>
             <Nav />
-            <main className="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 sm:py-10">
+            <main className="mx-auto min-h-[calc(100svh-3.5rem)] max-w-[1120px] px-4 py-8 sm:px-6 sm:py-10">
               <Suspense fallback={<div className="py-20 text-center text-dim">Loading…</div>}>
                 <Routes>
                   <Route path="/" element={<Home />} />
