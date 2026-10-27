@@ -1,21 +1,22 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { LIMITS, playerFor, sha256, today, type Rarity } from "./lib";
+import { LIMITS, playerFor, today, type Rarity } from "./lib";
 
-// A player is a handle plus a secret token the browser generates and keeps. The token is the login: the same token on
-// another device is the same player.
+// A signed-in Clerk user picks a handle once; that makes them a player.
 export const join = mutation({
-  args: { handle: v.string(), token: v.string() },
-  handler: async (ctx, { handle, token }) => {
+  args: { handle: v.string() },
+  handler: async (ctx, { handle }) => {
+    const id = await ctx.auth.getUserIdentity();
+    if (!id) throw new ConvexError("Sign in first");
+    if (await playerFor(ctx)) throw new ConvexError("You already have a handle");
     const h = handle.trim();
     if (!/^[A-Za-z0-9_-]{3,16}$/.test(h)) throw new ConvexError("Handles are 3-16 letters, digits, _ or -");
-    if (token.length < 32) throw new ConvexError("bad token");
     const taken = await ctx.db.query("players").withIndex("by_handle", (q) => q.eq("handleLower", h.toLowerCase())).unique();
     if (taken) throw new ConvexError(`${h} is taken`);
     await ctx.db.insert("players", {
       handle: h,
       handleLower: h.toLowerCase(),
-      tokenHash: await sha256(token),
+      userId: id.tokenIdentifier,
       points: 0,
       caught: 0,
       dailySolved: 0,
@@ -29,9 +30,9 @@ export const join = mutation({
 
 // The signed-in player with what they have left today.
 export const me = query({
-  args: { token: v.optional(v.string()) },
-  handler: async (ctx, { token }) => {
-    const p = await playerFor(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const p = await playerFor(ctx);
     if (!p) return null;
     const date = today();
     const scans = await ctx.db

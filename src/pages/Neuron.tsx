@@ -13,8 +13,8 @@ export function Neuron() {
   const layer = Number(params.layer);
   const n = Number(params.n);
   const valid = Number.isInteger(layer) && Number.isInteger(n) && layer >= 0 && layer < MODEL.layers && n >= 0 && n < MODEL.width;
-  const { token, me, requireJoin } = useSession();
-  const card = useQuery(api.neurons.card, valid ? { token, layer, n } : "skip");
+  const { me, requireJoin } = useSession();
+  const card = useQuery(api.neurons.card, valid ? { layer, n } : "skip");
   const overview = useQuery(api.neurons.overview);
   const scan = useMutation(api.neurons.scan);
   const catchNeuron = useAction(api.neurons.catchNeuron);
@@ -28,10 +28,10 @@ export function Neuron() {
 
   const doScan = async () => {
     setError(null);
-    const t = await requireJoin();
-    if (!t) return;
+    const ok = await requireJoin();
+    if (!ok) return;
     try {
-      await scan({ token: t, layer, n });
+      await scan({ layer, n });
     } catch (e) {
       setError(errorText(e));
     }
@@ -39,11 +39,11 @@ export function Neuron() {
 
   const doCatch = async () => {
     setError(null);
-    const t = await requireJoin();
-    if (!t || !card.profile) return;
+    const ok = await requireJoin();
+    if (!ok || !card.profile) return;
     setBusy(true);
     try {
-      const r = await catchNeuron({ token: t, layer, n, name: name.trim() || card.profile.words[0] || dexNo(layer, n) });
+      const r = await catchNeuron({ layer, n, name: name.trim() || card.profile.words[0] || dexNo(layer, n) });
       setCaught(r);
     } catch (e) {
       setError(errorText(e));

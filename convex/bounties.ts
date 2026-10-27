@@ -44,15 +44,15 @@ export const list = query({
 
 // One bounty: the brief, par, the leaderboard (neurons stay secret until it closes) and this player's entries.
 export const get = query({
-  args: { slug: v.string(), token: v.optional(v.string()) },
-  handler: async (ctx, { slug, token }) => {
+  args: { slug: v.string() },
+  handler: async (ctx, { slug }) => {
     const b = await ctx.db.query("bounties").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
     if (!b) return null;
     const now = Date.now();
     const s = summary(b, now);
     const closed = s.state === "closed";
     const top = await standings(ctx, b);
-    const player = await playerFor(ctx, token);
+    const player = await playerFor(ctx);
     const mine = player
       ? await ctx.db.query("entries").withIndex("by_player_bounty", (q) => q.eq("playerId", player._id).eq("bountyId", b._id)).collect()
       : [];
@@ -78,9 +78,9 @@ export const get = query({
 });
 
 export const submit = mutation({
-  args: { token: v.string(), slug: v.string(), pushes: v.array(push) },
-  handler: async (ctx, { token, slug, pushes }) => {
-    const player = await requirePlayer(ctx, token);
+  args: { slug: v.string(), pushes: v.array(push) },
+  handler: async (ctx, { slug, pushes }) => {
+    const player = await requirePlayer(ctx);
     const b = await ctx.db.query("bounties").withIndex("by_slug", (q) => q.eq("slug", slug)).unique();
     const now = Date.now();
     if (!b || now < b.startsAt || now >= b.endsAt) throw new ConvexError("This bounty isn't open");
@@ -97,7 +97,7 @@ export const submit = mutation({
     if (mine.length >= LIMITS.entries) throw new ConvexError(`Out of entries for this bounty (${LIMITS.entries})`);
     const pushesR = pushes.map((p) => ({ ...p, dose: Math.round(p.dose * 100) / 100 }));
     const entryId = await ctx.db.insert("entries", { bountyId: b._id, playerId: player._id, pushes: pushesR, status: "pending" });
-    await enqueue(ctx, "judge", `judge:${entryId}`, { entryId, slug, pushes: pushesR, prompts: b.prompts, anchors: b.anchors }, 0);
+    await enqueue(ctx, "judge", `judge:${entryId}`, { entryId, slug, pushes: pushesR, prompts: b.prompts, anchors: b.anchors }, 0, player._id);
   },
 });
 

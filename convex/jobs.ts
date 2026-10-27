@@ -1,18 +1,40 @@
-import type { Doc } from "./_generated/dataModel";
+import { ConvexError } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { MODEL } from "./lib";
+import { GPU, MODEL } from "./lib";
 
 export const COVERAGE_BINS = 96;
 
 // Queues GPU work unless the same key is already pending or running. priority 0 means a player is waiting on it.
-export async function enqueue(ctx: MutationCtx, kind: Doc<"jobs">["kind"], key: string, args: unknown, priority = 0) {
+// `by` is the player asking. New work for them is refused once they have GPU.perPlayer jobs waiting, or once GPU.queue
+// players' jobs are waiting in total, so nobody can flood the one GPU. The throw rolls back the caller's mutation, so a
+// refused scan, guess or entry isn't used up.
+export async function enqueue(
+  ctx: MutationCtx,
+  kind: Doc<"jobs">["kind"],
+  key: string,
+  args: unknown,
+  priority = 0,
+  by?: Id<"players">,
+) {
   const open = await ctx.db
     .query("jobs")
     .withIndex("by_key", (q) => q.eq("key", key))
     .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "running")))
     .first();
   if (open) return open._id;
-  return await ctx.db.insert("jobs", { kind, key, args, priority, status: "pending" });
+  if (by) {
+    const mine = async (status: "pending" | "running") =>
+      (await ctx.db.query("jobs").withIndex("by_by_status", (q) => q.eq("by", by).eq("status", status)).take(GPU.perPlayer)).length;
+    if ((await mine("pending")) + (await mine("running")) >= GPU.perPlayer)
+      throw new ConvexError("You already have a few things waiting on the GPU. Give them a moment.");
+    const waiting = await ctx.db
+      .query("jobs")
+      .withIndex("by_status_priority", (q) => q.eq("status", "pending").eq("priority", 0))
+      .take(GPU.queue);
+    if (waiting.length >= GPU.queue) throw new ConvexError("The GPU is busy right now. Try again in a minute.");
+  }
+  return await ctx.db.insert("jobs", { kind, key, args, priority, status: "pending", by });
 }
 
 export async function globalStats(ctx: QueryCtx) {

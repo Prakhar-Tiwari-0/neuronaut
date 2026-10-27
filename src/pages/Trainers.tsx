@@ -1,9 +1,7 @@
 import { useQuery } from "convex/react";
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { Button, Label, NeuronLink, RarityTag, Stat } from "../components/ui";
-import { setToken, storedToken, useSession } from "../lib/session";
+import { Label, NeuronLink, RarityTag, Stat } from "../components/ui";
 
 export function Trainers() {
   const top = useQuery(api.players.leaderboard);
@@ -46,12 +44,8 @@ export function Trainers() {
 export function Trainer() {
   const { handle = "" } = useParams();
   const p = useQuery(api.players.profile, { handle });
-  const { me } = useSession();
-  const nav = useNavigate();
-  const [showKey, setShowKey] = useState(false);
   if (p === undefined) return <div className="py-20 text-center text-faint">loading</div>;
   if (p === null) return <div className="py-20 text-center text-dim">No trainer called {handle}.</div>;
-  const isMe = me?.handle === p.handle;
   return (
     <div className="max-w-[920px]">
       <h1 className="text-3xl font-medium tracking-tight">{p.handle}</h1>
@@ -82,24 +76,6 @@ export function Trainer() {
           </table>
         )}
       </div>
-      {isMe && (
-        <div className="mt-12 border-t border-line pt-6">
-          <Label>Your key</Label>
-          <p className="mt-2 text-xs text-dim">This key is your login. Keep it to play on another device. Anyone with it plays as you.</p>
-          <div className="mt-3 flex items-center gap-2">
-            {showKey ? <code className="font-mono text-xs">{storedToken()}</code> : <Button variant="ghost" onClick={() => setShowKey(true)}>Show key</Button>}
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setToken(null);
-                nav("/");
-              }}
-            >
-              Log out
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

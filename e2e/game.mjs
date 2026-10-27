@@ -1,14 +1,18 @@
 // End-to-end run of the whole game against a live stack (Convex, the GPU worker, Vite), in a real browser:
-// join, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged. Also checks that future
-// puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
+// sign in, pick a handle, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged. Also
+// checks that future puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
 //
 //   node e2e/game.mjs [--url http://127.0.0.1:5173]
+//
+// Signs in as a throwaway Clerk user (created through Clerk's backend API, deleted at the end), so it needs the dev
+// instance's keys in .env.clerk.local (`clerk env pull --file .env.clerk.local`).
 //
 // Writes e2e/artifacts/<timestamp>/: a screenshot per step and report.json (each step, ok, details), and exits
 // non-zero if a step fails. The daily's answer comes from `convex run admin:answer`, so the solve path is exercised.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { clerk, clerkSetup } from "@clerk/testing/playwright";
 import { ConvexHttpClient } from "convex/browser";
 import { chromium } from "playwright";
 
@@ -17,6 +21,24 @@ const out = join("e2e", "artifacts", new Date().toISOString().replace(/[:.]/g, "
 mkdirSync(out, { recursive: true });
 const report = { url, steps: [] };
 const handle = `e2e_${Math.random().toString(36).slice(2, 8)}`;
+
+const keys = Object.fromEntries(
+  readFileSync(".env.clerk.local", "utf8").split("\n").filter((l) => l.includes("=")).map((l) => l.split(/=(.*)/s).slice(0, 2)),
+);
+process.env.CLERK_SECRET_KEY = keys.CLERK_SECRET_KEY;
+process.env.CLERK_PUBLISHABLE_KEY = keys.VITE_CLERK_PUBLISHABLE_KEY;
+async function clerkApi(method, path, body) {
+  const r = await fetch(`https://api.clerk.com/v1${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${keys.CLERK_SECRET_KEY}`, "Content-Type": "application/json" },
+    body: body && JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`Clerk ${method} ${path}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+const email = `${handle.replace("_", "-")}+clerk_test@example.com`;
+await clerkSetup();
+const user = await clerkApi("POST", "/users", { email_address: [email], skip_password_requirement: true });
 
 function convex(fn, args) {
   const env = { ...process.env, CONVEX_AGENT_MODE: "anonymous", CONVEX_TMPDIR: join(process.cwd(), ".tmp") };
@@ -46,10 +68,11 @@ async function step(name, fn) {
 }
 
 try {
-  await step("join", async () => {
+  await step("sign in and pick a handle", async () => {
     await page.goto(url + "/");
-    await page.getByRole("button", { name: "Pick a handle" }).click();
-    await page.getByPlaceholder("handle").fill(handle);
+    await page.getByRole("button", { name: "Sign in" }).waitFor();
+    await clerk.signIn({ page, emailAddress: email });
+    await page.getByPlaceholder("handle").fill(handle); // a new user is asked for a handle right away
     await page.getByRole("button", { name: "Start" }).click();
     await page.getByRole("link", { name: handle }).waitFor();
     return { handle };
@@ -126,10 +149,11 @@ try {
   await step("NaN bounty dose is refused", async () => {
     // the browser client can send NaN (Convex float64 allows it), so call the backend the same way the app does
     const envUrl = readFileSync(".env.local", "utf8").match(/^VITE_CONVEX_URL=(.*)$/m)[1].trim();
-    const token = await page.evaluate(() => localStorage.getItem(Object.keys(localStorage).find((k) => /token/i.test(k))));
+    const jwt = await page.evaluate(() => window.Clerk.session.getToken({ template: "convex" }));
     const client = new ConvexHttpClient(envUrl);
+    client.setAuth(jwt);
     try {
-      await client.mutation("bounties:submit", { token, slug: "lost-at-sea", pushes: [{ layer: 23, n: 8663, dose: NaN }] });
+      await client.mutation("bounties:submit", { slug: "lost-at-sea", pushes: [{ layer: 23, n: 8663, dose: NaN }] });
     } catch (e) {
       if (/Doses are/.test(String(e))) return "refused";
       throw e;
@@ -152,6 +176,7 @@ try {
   // the failing step is already in the report
 } finally {
   await browser.close();
+  await clerkApi("DELETE", `/users/${user.id}`).catch((e) => console.log("cleanup:", e.message));
 }
 
 report.ok = report.steps.every((s) => s.ok) && report.steps.length === 11;

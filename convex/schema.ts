@@ -48,7 +48,7 @@ export default defineSchema({
   players: defineTable({
     handle: v.string(),
     handleLower: v.string(),
-    tokenHash: v.string(),
+    userId: v.string(), // the Clerk identity's tokenIdentifier: one player per sign-in
     points: v.number(),
     caught: v.number(),
     dailySolved: v.number(),
@@ -57,7 +57,7 @@ export default defineSchema({
     lastSolved: v.optional(v.string()),
     bountyWins: v.number(),
   })
-    .index("by_token", ["tokenHash"])
+    .index("by_user", ["userId"])
     .index("by_handle", ["handleLower"])
     .index("by_points", ["points"]),
 
@@ -99,8 +99,10 @@ export default defineSchema({
     status: v.union(v.literal("pending"), v.literal("running"), v.literal("done"), v.literal("failed")),
     startedAt: v.optional(v.number()),
     error: v.optional(v.string()),
+    by: v.optional(v.id("players")), // the player who asked, for their GPU budget
   })
     .index("by_status_priority", ["status", "priority"])
+    .index("by_by_status", ["by", "status"])
     .index("by_key", ["key"]),
 
   dailies: defineTable({

@@ -10,7 +10,7 @@ const LINKS = [
 ] as const;
 
 export function Nav() {
-  const { me, requireJoin } = useSession();
+  const { me, signedIn, signIn, signOut, requireJoin } = useSession();
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur-sm">
       <div className="mx-auto flex h-12 max-w-[1180px] items-center gap-6 px-5">
@@ -39,10 +39,17 @@ export function Nav() {
               <Link to={`/t/${me.handle}`} className="text-fg hover:underline underline-offset-4">
                 {me.handle}
               </Link>
+              <button className="text-faint hover:text-fg" onClick={signOut}>
+                sign out
+              </button>
             </>
-          ) : (
+          ) : signedIn ? (
             <button className="text-dim hover:text-fg" onClick={() => requireJoin()}>
               Pick a handle
+            </button>
+          ) : (
+            <button className="text-dim hover:text-fg" onClick={signIn}>
+              Sign in
             </button>
           )}
         </div>

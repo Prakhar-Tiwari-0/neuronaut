@@ -25,3 +25,24 @@ export const answer = internalQuery({
     return d ? { layer: d.layer, n: d.n } : null;
   },
 });
+
+// Deletes every player and what they did (scans, catches, guesses, results, entries), and un-catches their neurons.
+// For dev deployments and for moving to a new players schema; puzzles, bounties and measured neurons stay.
+export const resetPlayers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let n = 0;
+    for (const c of await ctx.db.query("catches").collect()) {
+      const p = await ctx.db.query("profiles").withIndex("by_key", (q) => q.eq("key", c.key)).unique();
+      if (p) await ctx.db.patch(p._id, { caught: false });
+    }
+    for (const t of ["scans", "catches", "guesses", "results", "entries", "players"] as const)
+      for (const d of await ctx.db.query(t).collect()) {
+        await ctx.db.delete(d._id);
+        n++;
+      }
+    const s = await ctx.db.query("stats").withIndex("by_name", (q) => q.eq("name", "global")).unique();
+    if (s) await ctx.db.patch(s._id, { caught: 0, coverage: s.coverage.map(() => 0) });
+    return n;
+  },
+});

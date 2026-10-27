@@ -12,7 +12,7 @@ import { errorText, useSession } from "../lib/session";
 const BINS = 96;
 
 export function Dex() {
-  const { token, me, requireJoin } = useSession();
+  const { me, requireJoin } = useSession();
   const nav = useNavigate();
   const overview = useQuery(api.neurons.overview);
   const scan = useMutation(api.neurons.scan);
@@ -24,11 +24,11 @@ export function Dex() {
 
   const doScan = async (random: boolean) => {
     setError(null);
-    const t = await requireJoin();
-    if (!t) return;
+    const ok = await requireJoin();
+    if (!ok) return;
     if (!random && (layer === "" || n === "")) return setError("Enter a layer and a neuron, or scan a random one");
     try {
-      const r = await scan(random ? { token: t } : { token: t, layer: Number(layer), n: Number(n) });
+      const r = await scan(random ? {} : { layer: Number(layer), n: Number(n) });
       nav(`/n/${r.layer}/${r.n}`);
     } catch (e) {
       setError(errorText(e));
@@ -99,7 +99,7 @@ export function Dex() {
             </div>
           )}
         </div>
-        {tab === "caught" ? <Caught rarity={rarity} /> : <Seen token={token} />}
+        {tab === "caught" ? <Caught rarity={rarity} /> : <Seen signedIn={!!me} />}
       </section>
     </div>
   );
@@ -137,9 +137,9 @@ function Caught({ rarity }: { rarity?: Rarity }) {
   );
 }
 
-function Seen({ token }: { token?: string }) {
-  const seen = useQuery(api.neurons.seen, { token });
-  if (!token) return <div className="py-6 text-dim">Pick a handle and scan some neurons.</div>;
+function Seen({ signedIn }: { signedIn: boolean }) {
+  const seen = useQuery(api.neurons.seen, {});
+  if (!signedIn) return <div className="py-6 text-dim">Pick a handle and scan some neurons.</div>;
   if (seen === undefined) return <div className="py-6 text-faint">loading</div>;
   if (!seen.length) return <div className="py-6 text-dim">You haven't scanned anything yet.</div>;
   return (

@@ -1,4 +1,6 @@
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ClerkProvider, useAuth } from "@clerk/react";
+import { ConvexReactClient } from "convex/react";
+import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
@@ -15,9 +17,23 @@ import { Trainer, Trainers } from "./pages/Trainers";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 
+// Clerk's modals in the site's colors: true black, white text.
+const appearance = {
+  variables: {
+    colorBackground: "#000",
+    colorText: "#fff",
+    colorPrimary: "#fff",
+    colorTextOnPrimaryBackground: "#000",
+    colorInputBackground: "#0a0a0a",
+    colorInputText: "#fff",
+    borderRadius: "0",
+  },
+};
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ConvexProvider client={convex}>
+    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} appearance={appearance}>
+    <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
       <BrowserRouter>
         <SessionProvider>
           <Nav />
@@ -44,6 +60,7 @@ createRoot(document.getElementById("root")!).render(
           </footer>
         </SessionProvider>
       </BrowserRouter>
-    </ConvexProvider>
+    </ConvexProviderWithClerk>
+    </ClerkProvider>
   </StrictMode>,
 );

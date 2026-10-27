@@ -33,12 +33,12 @@ export const search = query({
 
 // A neuron's card. The measured profile shows only once this player has scanned or guessed it, or someone caught it.
 export const card = query({
-  args: { token: v.optional(v.string()), layer: v.number(), n: v.number() },
-  handler: async (ctx, { token, layer, n }) => {
+  args: { layer: v.number(), n: v.number() },
+  handler: async (ctx, { layer, n }) => {
     validNeuron(layer, n);
     const key = neuronKey(layer, n);
     const row = await ctx.db.query("neurons").withIndex("by_ln", (q) => q.eq("layer", layer).eq("n", n)).unique();
-    const player = await playerFor(ctx, token);
+    const player = await playerFor(ctx);
     const scanned = player
       ? !!(await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first())
       : false;
@@ -63,9 +63,9 @@ export const card = query({
 // Spends a scan to reveal a neuron's card (queues the GPU if nobody measured it yet). No layer/n = a random neuron.
 // Rescanning a neuron you have already seen is free.
 export const scan = mutation({
-  args: { token: v.string(), layer: v.optional(v.number()), n: v.optional(v.number()) },
+  args: { layer: v.optional(v.number()), n: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const player = await requirePlayer(ctx, args.token);
+    const player = await requirePlayer(ctx);
     let { layer, n } = args;
     if (layer === undefined || n === undefined) {
       layer = Math.floor(Math.random() * MODEL.layers);
@@ -80,16 +80,16 @@ export const scan = mutation({
       .filter((s) => s.source === "scan").length;
     if (used >= LIMITS.scans) throw new ConvexError(`Out of scans for today (${LIMITS.scans}). They refill at 00:00 UTC.`);
     await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "scan" });
-    if (!(await profileOf(ctx, key))) await enqueue(ctx, "profile", `profile:${key}`, { layer, n }, 0);
+    if (!(await profileOf(ctx, key))) await enqueue(ctx, "profile", `profile:${key}`, { layer, n }, 0, player._id);
     return { layer, n };
   },
 });
 
 // The neurons this player has seen, newest first, with what is known about each.
 export const seen = query({
-  args: { token: v.optional(v.string()) },
-  handler: async (ctx, { token }) => {
-    const player = await playerFor(ctx, token);
+  args: {},
+  handler: async (ctx) => {
+    const player = await playerFor(ctx);
     if (!player) return [];
     const rows = await ctx.db.query("scans").withIndex("by_player", (q) => q.eq("playerId", player._id)).order("desc").take(60);
     return await Promise.all(
@@ -110,9 +110,9 @@ export const seen = query({
 });
 
 export const catchCheck = internalQuery({
-  args: { token: v.string(), layer: v.number(), n: v.number() },
-  handler: async (ctx, { token, layer, n }) => {
-    const player = await requirePlayer(ctx, token);
+  args: { layer: v.number(), n: v.number() },
+  handler: async (ctx, { layer, n }) => {
+    const player = await requirePlayer(ctx);
     const key = neuronKey(layer, n);
     const scanned = await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first();
     if (!scanned) throw new ConvexError("Scan it before you catch it");
@@ -124,9 +124,9 @@ export const catchCheck = internalQuery({
 });
 
 export const catchCommit = internalMutation({
-  args: { token: v.string(), layer: v.number(), n: v.number(), name: v.string(), uniqueness: v.number() },
-  handler: async (ctx, { token, layer, n, name, uniqueness }) => {
-    const player = await requirePlayer(ctx, token);
+  args: { layer: v.number(), n: v.number(), name: v.string(), uniqueness: v.number() },
+  handler: async (ctx, { layer, n, name, uniqueness }) => {
+    const player = await requirePlayer(ctx);
     const key = neuronKey(layer, n);
     const date = today();
     const caughtToday = await ctx.db.query("catches").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).collect();
@@ -146,11 +146,11 @@ export const catchCommit = internalMutation({
 // Catch a scanned neuron and name it. Points = rarity points x (1 + uniqueness), where uniqueness is how far its effect
 // is from every neuron caught before it (1 - the nearest cosine), so the hundredth "ocean" neuron is worth less.
 export const catchNeuron = action({
-  args: { token: v.string(), layer: v.number(), n: v.number(), name: v.string() },
+  args: { layer: v.number(), n: v.number(), name: v.string() },
   handler: async (ctx, args): Promise<{ points: number; rarity: string; uniqueness: number }> => {
     const name = args.name.trim().replace(/\s+/g, " ");
     if (name.length < 2 || name.length > 24) throw new ConvexError("Names are 2-24 characters");
-    const { embedding } = await ctx.runQuery(internal.neurons.catchCheck, { token: args.token, layer: args.layer, n: args.n });
+    const { embedding } = await ctx.runQuery(internal.neurons.catchCheck, { layer: args.layer, n: args.n });
     const near = await ctx.vectorSearch("profiles", "by_embedding", { vector: embedding, limit: 1, filter: (q) => q.eq("caught", true) });
     const uniqueness = Math.min(1, Math.max(0, 1 - (near[0]?._score ?? 0)));
     return await ctx.runMutation(internal.neurons.catchCommit, { ...args, name, uniqueness: Math.round(uniqueness * 1000) / 1000 });

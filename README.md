@@ -39,6 +39,11 @@ bunx convex env set WORKER_SECRET <secret>
 bunx vite --port 5173 --host 127.0.0.1
 ```
 
+Players sign in with [Clerk](https://clerk.com). Link a Clerk app (`clerk link`, then
+`clerk env pull --file .env.clerk.local`), copy `VITE_CLERK_PUBLISHABLE_KEY` into `.env.local`, create a JWT template
+named `convex` (Clerk's Convex preset), and set its issuer on the backend:
+`bunx convex env set CLERK_JWT_ISSUER_DOMAIN https://<your-app>.clerk.accounts.dev`.
+
 The worker reads neuron-explorer's caches from `worker/cache/` (`lens_index.npz`, `steer_index.npz`, `vocab.json`,
 symlinks are fine) and `CONVEX_URL` and `WORKER_SECRET` from `worker/.env.local`.
 

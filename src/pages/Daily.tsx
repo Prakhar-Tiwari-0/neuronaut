@@ -13,8 +13,8 @@ function shareText(number: number, guesses: number, limit: number, solved: boole
 }
 
 export function Daily() {
-  const { token, requireJoin } = useSession();
-  const d = useQuery(api.daily.current, { token });
+  const { requireJoin } = useSession();
+  const d = useQuery(api.daily.current, {});
   const guess = useMutation(api.daily.guess);
   const [layer, setLayer] = useState("");
   const [n, setN] = useState("");
@@ -27,11 +27,11 @@ export function Daily() {
   const finished = !!d.result;
   const submit = async () => {
     setError(null);
-    const t = await requireJoin();
-    if (!t) return;
+    const ok = await requireJoin();
+    if (!ok) return;
     if (layer === "" || n === "") return setError("Enter a layer and a neuron");
     try {
-      await guess({ token: t, layer: Number(layer), n: Number(n) });
+      await guess({ layer: Number(layer), n: Number(n) });
       setN("");
     } catch (e) {
       setError(errorText(e));

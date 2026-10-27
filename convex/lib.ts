@@ -3,19 +3,16 @@ import type { QueryCtx } from "./_generated/server";
 
 export * from "./rules";
 
-export async function sha256(s: string) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+// The signed-in caller's player, or null if they're signed out or haven't picked a handle yet.
+export async function playerFor(ctx: QueryCtx) {
+  const id = await ctx.auth.getUserIdentity();
+  if (!id) return null;
+  return await ctx.db.query("players").withIndex("by_user", (q) => q.eq("userId", id.tokenIdentifier)).unique();
 }
 
-export async function playerFor(ctx: QueryCtx, token: string | undefined) {
-  if (!token) return null;
-  const tokenHash = await sha256(token);
-  return await ctx.db.query("players").withIndex("by_token", (q) => q.eq("tokenHash", tokenHash)).unique();
-}
-
-export async function requirePlayer(ctx: QueryCtx, token: string | undefined) {
-  const p = await playerFor(ctx, token);
+export async function requirePlayer(ctx: QueryCtx) {
+  if (!(await ctx.auth.getUserIdentity())) throw new ConvexError("Sign in first");
+  const p = await playerFor(ctx);
   if (!p) throw new ConvexError("Pick a handle first");
   return p;
 }

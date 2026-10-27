@@ -47,8 +47,8 @@ type Row = { layer: string; n: string; dose: string };
 
 export function Bounty() {
   const { slug = "" } = useParams();
-  const { token, requireJoin } = useSession();
-  const b = useQuery(api.bounties.get, { slug, token });
+  const { requireJoin } = useSession();
+  const b = useQuery(api.bounties.get, { slug });
   const submit = useMutation(api.bounties.submit);
   const [rows, setRows] = useState<Row[]>([{ layer: "", n: "", dose: "0.5" }]);
   const [error, setError] = useState<string | null>(null);
@@ -60,12 +60,12 @@ export function Bounty() {
   const setRow = (i: number, patch: Partial<Row>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const go = async () => {
     setError(null);
-    const t = await requireJoin();
-    if (!t) return;
+    const ok = await requireJoin();
+    if (!ok) return;
     const pushes = rows.filter((r) => r.layer !== "" || r.n !== "");
     if (!pushes.length || pushes.some((r) => r.layer === "" || r.n === "")) return setError("Fill in each neuron's layer and number");
     try {
-      await submit({ token: t, slug, pushes: pushes.map((r) => ({ layer: Number(r.layer), n: Number(r.n), dose: Number(r.dose) })) });
+      await submit({ slug, pushes: pushes.map((r) => ({ layer: Number(r.layer), n: Number(r.n), dose: Number(r.dose) })) });
       setOpen(0);
     } catch (e) {
       setError(errorText(e));

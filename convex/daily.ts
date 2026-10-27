@@ -31,14 +31,14 @@ export function dailyPoints(guesses: number) {
 // Today's puzzle: the hidden neuron's steered replies next to the unsteered ones, hints this player has unlocked, their
 // guesses (hottest first) and, once they finish, the answer.
 export const current = query({
-  args: { token: v.optional(v.string()), date: v.optional(v.string()) },
-  handler: async (ctx, { token, date }) => {
+  args: { date: v.optional(v.string()) },
+  handler: async (ctx, { date }) => {
     const now = today();
     const d = date ?? now;
     if (d > now) return null; // puzzles are generated days ahead; their clues stay hidden until their date
     const daily = await dailyFor(ctx, d);
     if (!daily) return null;
-    const player = await playerFor(ctx, token);
+    const player = await playerFor(ctx);
     const guesses = player
       ? await ctx.db.query("guesses").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", d)).collect()
       : [];
@@ -108,10 +108,10 @@ async function settle(ctx: MutationCtx, playerId: Doc<"players">["_id"], daily: 
 }
 
 export const guess = mutation({
-  args: { token: v.string(), layer: v.number(), n: v.number() },
-  handler: async (ctx, { token, layer, n }) => {
+  args: { layer: v.number(), n: v.number() },
+  handler: async (ctx, { layer, n }) => {
     validNeuron(layer, n);
-    const player = await requirePlayer(ctx, token);
+    const player = await requirePlayer(ctx);
     const date = today();
     const daily = await dailyFor(ctx, date);
     if (!daily) throw new ConvexError("No puzzle today yet");
@@ -127,7 +127,7 @@ export const guess = mutation({
       await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "guess" });
     const prof = await ctx.db.query("profiles").withIndex("by_key", (q) => q.eq("key", key)).unique();
     if (prof) await resolve(ctx, (await ctx.db.get(id))!, prof.embedding, daily);
-    else await enqueue(ctx, "profile", `profile:${key}`, { layer, n }, 0);
+    else await enqueue(ctx, "profile", `profile:${key}`, { layer, n }, 0, player._id);
   },
 });
 

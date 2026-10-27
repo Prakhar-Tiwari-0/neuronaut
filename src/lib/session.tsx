@@ -1,74 +1,86 @@
-import { useMutation, useQuery } from "convex/react";
+import { useClerk } from "@clerk/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
-import { createContext, useCallback, useContext, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { JoinDialog } from "../components/JoinDialog";
-
-const KEY = "neurodex:token"; // the old name, kept so existing players stay signed in
-const listeners = new Set<() => void>();
-
-function readToken() {
-  return localStorage.getItem(KEY) ?? undefined;
-}
-
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem(KEY, token);
-  else localStorage.removeItem(KEY);
-  listeners.forEach((l) => l());
-}
-
-function newToken() {
-  return [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 export function errorText(e: unknown) {
   return e instanceof ConvexError ? String(e.data) : "Something went wrong. Try again.";
 }
 
 type Session = {
-  token: string | undefined;
-  me: (typeof api.players.me)["_returnType"] | undefined;
-  // Resolves with the token once the player has a handle (asking for one if needed), or null if they back out.
-  requireJoin: () => Promise<string | null>;
+  signedIn: boolean;
+  me: (typeof api.players.me)["_returnType"] | undefined; // undefined while loading, null without a player
+  // Resolves true once the caller is a player. Signed out: opens Clerk's sign-in and resolves false (they act again
+  // once signed in). Signed in without a handle: asks for one.
+  requireJoin: () => Promise<boolean>;
+  signIn: () => void;
+  signOut: () => void;
 };
 
 const Ctx = createContext<Session | null>(null);
 
-// The player lives in localStorage as a random token; the server only stores its hash.
+// Sign-in is Clerk; a player is a signed-in user who has picked a handle (players.join).
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const token = useSyncExternalStore((cb) => (listeners.add(cb), () => listeners.delete(cb)), readToken);
-  const me = useQuery(api.players.me, { token });
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const clerk = useClerk();
+  const me = useQuery(api.players.me, isAuthenticated ? {} : "skip");
   const join = useMutation(api.players.join);
-  const [pending, setPending] = useState<((t: string | null) => void) | null>(null);
+  const [pending, setPending] = useState<((ok: boolean) => void) | null>(null);
 
-  const requireJoin = useCallback(() => {
-    if (token && me) return Promise.resolve(token);
-    return new Promise<string | null>((resolve) => setPending(() => resolve));
-  }, [token, me]);
+  // Right after a page load Convex hasn't confirmed the Clerk session yet, and the player row is still loading. A click
+  // in that window must wait, not be read as "signed out" (Clerk ignores openSignIn for a signed-in user, so the
+  // click would just vanish).
+  const now = useRef({ isAuthenticated, me });
+  now.current = { isAuthenticated, me };
+  const settled = !isLoading && (!isAuthenticated || me !== undefined);
+  const waiters = useRef<(() => void)[]>([]);
+  useEffect(() => {
+    if (!settled) return;
+    waiters.current.forEach((w) => w());
+    waiters.current = [];
+  }, [settled]);
 
-  const submit = async (handle: string) => {
-    const t = newToken();
-    await join({ handle, token: t });
-    setToken(t);
-    pending?.(t);
+  const requireJoin = useCallback(async () => {
+    if (!settled) await new Promise<void>((r) => waiters.current.push(r));
+    const { isAuthenticated, me } = now.current;
+    if (me) return true;
+    if (!isAuthenticated) {
+      clerk.openSignIn();
+      return false;
+    }
+    return new Promise<boolean>((resolve) => setPending(() => resolve));
+  }, [settled, clerk]);
+
+  // Ask for a handle as soon as a new user signs in, not on their first action.
+  useEffect(() => {
+    if (isAuthenticated && me === null) setPending((p: ((ok: boolean) => void) | null) => p ?? (() => {}));
+  }, [isAuthenticated, me]);
+
+  const finish = (ok: boolean) => {
+    pending?.(ok);
     setPending(null);
   };
 
   return (
-    <Ctx.Provider value={{ token: me ? token : undefined, me, requireJoin }}>
+    <Ctx.Provider
+      value={{
+        signedIn: isAuthenticated,
+        me: isAuthenticated ? me : null,
+        requireJoin,
+        signIn: () => clerk.openSignIn(),
+        signOut: () => clerk.signOut(),
+      }}
+    >
       {children}
-      {pending && (
+      {pending && isAuthenticated && me === null && (
         <JoinDialog
-          onJoin={submit}
-          onKey={(t) => {
-            setToken(t);
-            pending(t);
-            setPending(null);
+          onJoin={async (handle) => {
+            await join({ handle });
+            finish(true);
           }}
-          onClose={() => {
-            pending(null);
-            setPending(null);
-          }}
+          onClose={() => finish(false)}
         />
       )}
     </Ctx.Provider>
@@ -79,8 +91,4 @@ export function useSession() {
   const s = useContext(Ctx);
   if (!s) throw new Error("useSession outside SessionProvider");
   return s;
-}
-
-export function storedToken() {
-  return readToken();
 }

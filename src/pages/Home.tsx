@@ -5,12 +5,10 @@ import { MODEL } from "../../convex/rules";
 import { Coverage } from "../components/Coverage";
 import { Label, NeuronLink, RarityTag } from "../components/ui";
 import { ago, until } from "../lib/format";
-import { useSession } from "../lib/session";
 
 export function Home() {
-  const { token } = useSession();
   const overview = useQuery(api.neurons.overview);
-  const daily = useQuery(api.daily.current, { token });
+  const daily = useQuery(api.daily.current, {});
   const bounties = useQuery(api.bounties.list);
   const open = bounties?.filter((b) => b.state === "open") ?? [];
   const total = MODEL.layers * MODEL.width;
