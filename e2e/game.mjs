@@ -1,13 +1,15 @@
 // End-to-end run of the whole game against a live stack (Convex, the GPU worker, Vite), in a real browser:
-// join, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged.
+// join, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged. Also checks that future
+// puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
 //
 //   node e2e/game.mjs [--url http://127.0.0.1:5173]
 //
 // Writes e2e/artifacts/<timestamp>/: a screenshot per step and report.json (each step, ok, details), and exits
 // non-zero if a step fails. The daily's answer comes from `convex run admin:answer`, so the solve path is exercised.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { ConvexHttpClient } from "convex/browser";
 import { chromium } from "playwright";
 
 const url = process.argv.includes("--url") ? process.argv[process.argv.indexOf("--url") + 1] : "http://127.0.0.1:5173";
@@ -18,7 +20,8 @@ const handle = `e2e_${Math.random().toString(36).slice(2, 8)}`;
 
 function convex(fn, args) {
   const env = { ...process.env, CONVEX_AGENT_MODE: "anonymous", CONVEX_TMPDIR: join(process.cwd(), ".tmp") };
-  return JSON.parse(execFileSync("bunx", ["convex", "run", fn, JSON.stringify(args)], { env, encoding: "utf8" }));
+  const out = execFileSync("bunx", ["convex", "run", fn, JSON.stringify(args)], { env, encoding: "utf8" }).trim();
+  return out ? JSON.parse(out) : null; // a null result prints nothing
 }
 
 const browser = await chromium.launch();
@@ -113,6 +116,27 @@ try {
     return { entry: entry.replace(/\s+/g, " ") };
   });
 
+  await step("future dailies stay hidden", async () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const d = convex("daily:current", { date: tomorrow });
+    if (d !== null) throw new Error(`daily for ${tomorrow} is readable`);
+    return { tomorrow, current: d };
+  });
+
+  await step("NaN bounty dose is refused", async () => {
+    // the browser client can send NaN (Convex float64 allows it), so call the backend the same way the app does
+    const envUrl = readFileSync(".env.local", "utf8").match(/^VITE_CONVEX_URL=(.*)$/m)[1].trim();
+    const token = await page.evaluate(() => localStorage.getItem(Object.keys(localStorage).find((k) => /token/i.test(k))));
+    const client = new ConvexHttpClient(envUrl);
+    try {
+      await client.mutation("bounties:submit", { token, slug: "lost-at-sea", pushes: [{ layer: 23, n: 8663, dose: NaN }] });
+    } catch (e) {
+      if (/Doses are/.test(String(e))) return "refused";
+      throw e;
+    }
+    throw new Error("NaN dose was accepted");
+  });
+
   await step("trainer page", async () => {
     await page.goto(url + `/t/${handle}`);
     await page.getByText("Points").waitFor();
@@ -130,7 +154,7 @@ try {
   await browser.close();
 }
 
-report.ok = report.steps.every((s) => s.ok) && report.steps.length === 9;
+report.ok = report.steps.every((s) => s.ok) && report.steps.length === 11;
 writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 1));
 console.log(`${report.ok ? "PASS" : "FAIL"} -> ${out}`);
 process.exit(report.ok ? 0 : 1);
