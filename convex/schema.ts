@@ -43,6 +43,7 @@ export default defineSchema({
     caught: v.boolean(),
   })
     .index("by_key", ["key"])
+    .index("by_ln", ["layer", "n"])
     .vectorIndex("by_embedding", { vectorField: "embedding", dimensions: 256, filterFields: ["caught"] }),
 
   players: defineTable({
@@ -72,7 +73,8 @@ export default defineSchema({
   })
     .index("by_player", ["playerId"])
     .index("by_player_date", ["playerId", "date"])
-    .index("by_player_key", ["playerId", "key"]),
+    .index("by_player_key", ["playerId", "key"])
+    .index("by_player_ln", ["playerId", "layer", "n"]),
 
   catches: defineTable({
     playerId: v.id("players"),
@@ -86,6 +88,7 @@ export default defineSchema({
     date: v.string(),
   })
     .index("by_key", ["key"])
+    .index("by_ln", ["layer", "n"])
     .index("by_rarity", ["rarity"])
     .index("by_player", ["playerId"])
     .index("by_player_date", ["playerId", "date"]),
