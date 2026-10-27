@@ -9,7 +9,7 @@ import { errorText, useSession } from "../lib/session";
 
 function shareText(number: number, guesses: number, limit: number, solved: boolean, heats: number[]) {
   const sq = heats.map((h, i) => (solved && i === heats.length - 1 ? "🟩" : h >= 70 ? "🟥" : h >= 45 ? "🟧" : h >= 20 ? "🟨" : "⬛")).join("");
-  return `NEURODEX daily #${number} ${solved ? guesses : "X"}/${limit}\n${sq}\n${location.origin}/daily`;
+  return `NEURONAUT daily #${number} ${solved ? guesses : "X"}/${limit}\n${sq}\n${location.origin}/daily`;
 }
 
 export function Daily() {

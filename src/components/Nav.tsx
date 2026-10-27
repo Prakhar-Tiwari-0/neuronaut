@@ -15,7 +15,7 @@ export function Nav() {
     <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur-sm">
       <div className="mx-auto flex h-12 max-w-[1180px] items-center gap-6 px-5">
         <Link to="/" className="font-pixel text-[15px] tracking-wide">
-          NEURODEX
+          NEURONAUT
         </Link>
         <nav className="flex items-center gap-4 text-[13px]">
           {LINKS.map(([to, label]) => (

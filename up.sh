@@ -4,11 +4,11 @@
 #
 #   ./up.sh            # start (or restart) everything
 #   ./up.sh stop       # stop everything
-#   systemctl --user status 'neurodex-*'
+#   systemctl --user status 'neuronaut-*'
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$PWD
-UNITS=(neurodex-convex neurodex-vite neurodex-worker neurodex-readme)
+UNITS=(neuronaut-convex neuronaut-vite neuronaut-worker neuronaut-readme)
 
 for u in "${UNITS[@]}"; do
   systemctl --user stop "$u" 2>/dev/null || true
@@ -22,13 +22,13 @@ run() {  # unit, working dir, command...
   shift 2
   systemd-run --user --quiet --unit="$unit" --working-directory="$dir" \
     --property=Restart=on-failure --property=RestartSec=10 \
-    --property=StandardOutput="append:$ROOT/logs/${unit#neurodex-}.log" \
-    --property=StandardError="append:$ROOT/logs/${unit#neurodex-}.log" \
+    --property=StandardOutput="append:$ROOT/logs/${unit#neuronaut-}.log" \
+    --property=StandardError="append:$ROOT/logs/${unit#neuronaut-}.log" \
     --setenv=PATH="$PATH" --setenv=HOME="$HOME" "$@"
 }
 
-run neurodex-convex "$ROOT" env CONVEX_AGENT_MODE=anonymous CONVEX_TMPDIR="$ROOT/.tmp" bunx convex dev --tail-logs always
-run neurodex-vite "$ROOT" bunx vite --port 5173 --host 127.0.0.1
-run neurodex-worker "$ROOT/worker" bash -c 'set -a; . ./.env.local; set +a; exec uv run python main.py --sweep'
-run neurodex-readme "$ROOT" python3 worker/readme_progress.py
-systemctl --user --no-pager list-units 'neurodex-*'
+run neuronaut-convex "$ROOT" env CONVEX_AGENT_MODE=anonymous CONVEX_TMPDIR="$ROOT/.tmp" bunx convex dev --tail-logs always
+run neuronaut-vite "$ROOT" bunx vite --port 5173 --host 127.0.0.1
+run neuronaut-worker "$ROOT/worker" bash -c 'set -a; . ./.env.local; set +a; exec uv run python main.py --sweep'
+run neuronaut-readme "$ROOT" python3 worker/readme_progress.py
+systemctl --user --no-pager list-units 'neuronaut-*'

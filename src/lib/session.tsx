@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useState, useSyncExternalStore,
 import { api } from "../../convex/_generated/api";
 import { JoinDialog } from "../components/JoinDialog";
 
-const KEY = "neurodex:token";
+const KEY = "neurodex:token"; // the old name, kept so existing players stay signed in
 const listeners = new Set<() => void>();
 
 function readToken() {

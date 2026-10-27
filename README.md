@@ -1,11 +1,12 @@
-# neurodex
+# Neuronaut
 
-A game about the neurons inside an open language model (Qwen3.5-4B). Catch rare neurons for your dex, find the hidden
-neuron of the day, and win bounties by steering the model with the neurons you find.
+A game played inside Qwen3.5-4B. The model has 294,912 MLP neurons. Push one while it writes and it might start
+talking about the sea, turn into a doctor, or fall apart. Most do almost nothing. The game is finding the ones that
+don't.
 
 Built on [neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) by
 [lyramakesmusic](https://github.com/lyramakesmusic), used with permission. The steering method, the steer lens and the
-neuron index come from that project.
+neuron index come from there.
 
 <!-- sweep:start -->
 **Sweep progress** (every neuron in Qwen3.5-4B, measured once on a 4080 Super)
@@ -17,68 +18,61 @@ About 10.2 h left at 136 ms per neuron, ETA 2026-10-28 03:21 UTC. Updated 2026-1
 
 ## Modes
 
-- **Dex**: search the steer and logit lenses for free, spend a scan (12 a day) to see what a neuron does when pushed,
-  and catch up to 3 a day. Rarity comes from how strongly the push moves the model compared with random directions.
-  A catch is worth more the further its effect is from every neuron caught before it.
-- **Daily**: one hidden neuron was pushed while the model answered three prompts. Guess layer and neuron; each guess
-  shows how close its effect is to the hidden one. 15 guesses, with a layer band hint after 5 and a token hint after 10.
-- **Bounties**: steer the model toward a target with as many neurons as the bounty allows, 8 entries each. The GPU judges each entry on concept match
-  and coherence. The house's best single-neuron attempt is par.
+- **Dex.** Search every neuron's lenses for free. Spend a scan to see what a push actually does and how rare the neuron
+  is. You get 12 scans and 3 catches a day, and each neuron has one owner.
+- **Daily.** One hidden neuron was pushed while the model answered three prompts. Find it in 15 guesses. Each guess
+  tells you how close its effect is to the hidden one's.
+- **Bounties.** Steer the model toward a target like the sea or French. The GPU judges each entry on how far it moves
+  toward the target and whether the text stays readable. The house's best single neuron sets par.
 
-## Layout
+Rarity measures how hard a neuron moves the model against random pushes of the same size. A push that turns the reply
+into loops or gibberish is a glitch, which is worth a few points too.
 
-| path | what |
-| --- | --- |
-| `src/` | React + Tailwind client |
-| `convex/` | accounts, scans, catches, dailies, bounties, the job queue (`rules.ts` holds the game numbers) |
-| `worker/` | the GPU worker: pulls jobs from Convex, runs Qwen3.5-4B with HF transformers, writes results back |
-| `e2e/game.mjs` | end-to-end run of every mode in a real browser |
+## Running it
 
-The worker pulls jobs instead of serving requests, so it needs no open port.
-
-## Running locally
-
-Needs bun, uv, and a CUDA GPU with 16 GB (tested on a 4080 Super under WSL).
+You need bun, uv and a CUDA GPU with 16 GB. I run it on a 4080 Super under WSL.
 
 ```sh
 bun install
-CONVEX_AGENT_MODE=anonymous bunx convex dev          # local backend on :3210, pushes convex/
+CONVEX_AGENT_MODE=anonymous bunx convex dev    # local backend on :3210
 bunx convex env set WORKER_SECRET <secret>
 bunx vite --port 5173 --host 127.0.0.1
 ```
 
-The lens index comes from neuron-explorer's caches (`lens_index.npz`, `steer_index.npz`, `vocab.json` in
-`worker/cache/`, symlinks are fine):
+The worker reads neuron-explorer's caches from `worker/cache/` (`lens_index.npz`, `steer_index.npz`, `vocab.json`,
+symlinks are fine) and `CONVEX_URL` and `WORKER_SECRET` from `worker/.env.local`.
 
 ```sh
 cd worker && uv sync
 uv run python build_neurons.py > ../data/neurons.jsonl
 bunx convex import --table neurons ../data/neurons.jsonl
+set -a && . ./.env.local && set +a
+uv run python main.py --sweep
 ```
 
-Then the worker, with `CONVEX_URL` and `WORKER_SECRET` in `worker/.env.local`:
+`--sweep` measures every neuron whenever no player is waiting on the GPU. The first start also measures random-push
+baselines for each layer and caches them. Hourly crons create dailies and bounties, and dailies need the worker up.
 
-```sh
-cd worker && set -a && . ./.env.local && set +a
-uv run python main.py --sweep    # --sweep: measure every neuron while no player job is waiting
-```
+To leave it all running, use `./up.sh`. It starts Convex, Vite, the worker and the README updater as systemd user
+services that restart on a crash and log to `logs/`. `./up.sh stop` stops them. `nohup` and `setsid` stay in the
+terminal's cgroup and die with it, so they don't work here.
 
-`worker/readme_progress.py` keeps the sweep section at the top of this README current, committing and pushing it every
-10 minutes until the sweep is done.
+`worker/readme_progress.py` redraws the sweep bar above and pushes it every 10 minutes.
 
-To leave it running, `./up.sh` starts Convex, Vite, the sweeping worker and the README updater as systemd user services
-instead (logs in `logs/`, `./up.sh stop` to stop). They survive the shell that started them and restart on a crash;
-`nohup` or `setsid` don't escape a terminal or agent session's cgroup, so those get killed when it closes.
+## Layout
 
-The first start measures random-direction controls for every layer (cached in `worker/cache/`). Dailies and bounties
-are created by hourly crons, and the daily generator needs the worker running.
+| path | what |
+| --- | --- |
+| `src/` | React and Tailwind client |
+| `convex/` | players, scans, catches, dailies, bounties and the job queue. `rules.ts` holds the game numbers |
+| `worker/` | pulls jobs from Convex, runs the model with HF transformers, writes results back. It needs no open port |
+| `e2e/game.mjs` | plays every mode in a real browser |
 
-## E2E
+## Testing
 
 ```sh
 node e2e/game.mjs [--url http://127.0.0.1:5173]
 ```
 
-Joins, scans and catches a neuron, plays today's daily to a solve, enters a bounty and waits for the judge. Writes a
-screenshot per step and `report.json` to `e2e/artifacts/<timestamp>/`. On WSL without system Chrome libraries, point
-`LD_LIBRARY_PATH` at a local copy.
+It joins, scans and catches a neuron, solves today's daily and enters a bounty. Screenshots and `report.json` land in
+`e2e/artifacts/<timestamp>/`. On WSL without Chrome's system libraries, point `LD_LIBRARY_PATH` at a local copy.
