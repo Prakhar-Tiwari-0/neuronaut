@@ -1,0 +1,46 @@
+name: Labels
+
+# The one place labels are defined. pr-size.yml and pr-vouch.yml only apply them. Runs when this file changes on main.
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/labels.yml]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const labels = [
+              ["bug", "d73a4a", "Something is broken."],
+              ["enhancement", "a2eeef", "An approved improvement or new capability."],
+              ["needs-triage", "fbca04", "Needs a maintainer to confirm and categorize it."],
+              ["needs more info", "d4c5f9", "Waiting on the reporter. Closes after 7 days without a reply."],
+              ["neuron", "5319e7", "A report about what a specific neuron does."],
+              ["size:XS", "0e8a16", "0-9 changed lines, tests and lockfiles excluded."],
+              ["size:S", "5ebd3e", "10-29 changed lines, tests and lockfiles excluded."],
+              ["size:M", "fbca04", "30-99 changed lines, tests and lockfiles excluded."],
+              ["size:L", "fe7d37", "100-499 changed lines, tests and lockfiles excluded."],
+              ["size:XL", "d93f0b", "500-999 changed lines, tests and lockfiles excluded."],
+              ["size:XXL", "b60205", "1,000+ changed lines, tests and lockfiles excluded."],
+              ["vouch:trusted", "1f883d", "Author has write access or is in .github/VOUCHED.td."],
+              ["vouch:unvouched", "fbca04", "Author is not in .github/VOUCHED.td yet."],
+              ["vouch:denounced", "d1242f", "Author is blocked in .github/VOUCHED.td."],
+            ];
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            for (const [name, color, description] of labels) {
+              try {
+                const { data } = await github.rest.issues.getLabel({ ...repo, name });
+                if (data.color !== color || (data.description ?? "") !== description)
+                  await github.rest.issues.updateLabel({ ...repo, name, color, description });
+              } catch (e) {
+                if (e.status !== 404) throw e;
+                await github.rest.issues.createLabel({ ...repo, name, color, description });
+              }
+            }

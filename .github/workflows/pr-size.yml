@@ -1,0 +1,46 @@
+name: PR Size
+
+# Labels each PR size:XS..XXL by changed lines, not counting the E2E, tests or lockfiles (unless that's all it changes).
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    steps:
+      # pull_request_target: the PR's commits are only read as git data here. Never install, build or run them.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const { execFileSync } = require("node:child_process");
+            const pr = context.payload.pull_request;
+            const repo = { owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number };
+            const ref = `refs/remotes/pr-size/${pr.number}`;
+            execFileSync("git", ["fetch", "--no-tags", "origin", pr.base.sha, `+refs/pull/${pr.number}/head:${ref}`]);
+            const lines = (...paths) =>
+              execFileSync("git", ["diff", "--numstat", "--ignore-all-space", "--ignore-blank-lines", `${pr.base.sha}...${ref}`, "--", ...paths], { encoding: "utf8" })
+                .split("\n").filter(Boolean)
+                .reduce((sum, l) => sum + l.split("\t").slice(0, 2).reduce((s, x) => s + (Number.parseInt(x, 10) || 0), 0), 0);
+            const all = lines(".");
+            const code = lines(".", ":(exclude)e2e/**", ":(glob,exclude)**/tests/**", ":(glob,exclude)**/*.test.*", ":(exclude)bun.lock", ":(exclude)worker/uv.lock");
+            const n = code || all;
+            const size = n < 10 ? "XS" : n < 30 ? "S" : n < 100 ? "M" : n < 500 ? "L" : n < 1000 ? "XL" : "XXL";
+            const next = `size:${size}`;
+            const { data: current } = await github.rest.issues.listLabelsOnIssue({ ...repo, per_page: 100 });
+            for (const l of current)
+              if (l.name.startsWith("size:") && l.name !== next)
+                await github.rest.issues.removeLabel({ ...repo, name: l.name }).catch((e) => { if (e.status !== 404) throw e; });
+            if (!current.some((l) => l.name === next)) await github.rest.issues.addLabels({ ...repo, labels: [next] });
+            core.info(`#${pr.number}: ${code} code lines, ${all} total -> ${next}`);

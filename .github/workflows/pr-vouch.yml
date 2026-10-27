@@ -1,0 +1,75 @@
+name: PR Vouch
+
+# Labels each PR with its author's standing in .github/VOUCHED.td (via mitchellh/vouch). Comment /recheck-vouch on a
+# PR to rerun it, and every open PR is rechecked when VOUCHED.td changes on main.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
+  push:
+    branches: [main]
+    paths: [.github/VOUCHED.td]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  targets:
+    runs-on: ubuntu-24.04
+    outputs:
+      list: ${{ steps.collect.outputs.list }}
+    steps:
+      - id: collect
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { eventName, payload } = context;
+            let list = [];
+            if (eventName === "pull_request_target") list = [{ number: payload.pull_request.number, user: payload.pull_request.user.login }];
+            else if (eventName === "issue_comment") {
+              if (payload.issue.pull_request && payload.comment.body.includes("/recheck-vouch"))
+                list = [{ number: payload.issue.number, user: payload.issue.user.login }];
+            } else {
+              const pulls = await github.paginate(github.rest.pulls.list, { owner: context.repo.owner, repo: context.repo.repo, state: "open", per_page: 100 });
+              list = pulls.map((p) => ({ number: p.number, user: p.user.login }));
+            }
+            core.setOutput("list", JSON.stringify(list));
+
+  label:
+    needs: targets
+    if: needs.targets.outputs.list != '[]'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.targets.outputs.list) }}
+    concurrency:
+      group: pr-vouch-${{ matrix.target.number }}
+      cancel-in-progress: true
+    steps:
+      - id: vouch
+        uses: mitchellh/vouch/action/check-user@v1
+        with:
+          user: ${{ matrix.target.user }}
+          allow-fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/github-script@v8
+        env:
+          PR: ${{ matrix.target.number }}
+          STATUS: ${{ steps.vouch.outputs.status }}
+        with:
+          script: |
+            const repo = { owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.PR) };
+            const status = process.env.STATUS;
+            const next = status === "denounced" ? "vouch:denounced"
+              : ["bot", "collaborator", "vouched"].includes(status) ? "vouch:trusted" : "vouch:unvouched";
+            const { data: current } = await github.rest.issues.listLabelsOnIssue({ ...repo, per_page: 100 });
+            for (const l of current)
+              if (l.name.startsWith("vouch:") && l.name !== next)
+                await github.rest.issues.removeLabel({ ...repo, name: l.name }).catch((e) => { if (e.status !== 404) throw e; });
+            if (!current.some((l) => l.name === next)) await github.rest.issues.addLabels({ ...repo, labels: [next] });
+            core.info(`#${repo.issue_number}: ${status} -> ${next}`);

@@ -1,0 +1,31 @@
+name: CI
+
+# Typecheck, lint and build. The E2E needs a GPU and a live stack, so it runs locally (`node e2e/game.mjs`) and its
+# result goes in the PR's Verification section.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Typecheck the backend
+        run: bunx tsc -p convex --noEmit
+      - name: Typecheck and build the client
+        run: bun run build
+      - run: bun run lint
+      - name: Compile the worker
+        run: python3 -m py_compile worker/*.py

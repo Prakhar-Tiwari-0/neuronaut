@@ -1,0 +1,92 @@
+name: Bug report
+description: Something in the game, backend, worker or sweep is broken.
+title: "[Bug]: "
+labels:
+  - bug
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One problem per issue. Search existing issues first.
+        A neuron that does something odd is not a bug: use the neuron report form.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I included enough detail to reproduce the problem.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Game UI (src/)
+        - Daily
+        - Dex, scans and catches
+        - Bounties and judging
+        - Backend (convex/)
+        - GPU worker or sweep (worker/)
+        - Docs or setup
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open /daily
+        2. Guess L12 N400
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Commit
+      description: The commit you ran, or "live site".
+      placeholder: main @ abc1234
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and OS. For the worker, also GPU, CUDA and driver.
+      placeholder: Chrome 141, macOS 15 / RTX 4080 Super, WSL2, CUDA 13.0
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The relevant lines only (browser console, logs/worker.log, logs/convex.log). Redact secrets.
+      render: shell
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: Screenshots or recordings
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.webm,.log,.txt,.json"

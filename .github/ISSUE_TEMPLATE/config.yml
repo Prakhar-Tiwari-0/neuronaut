@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Idea or feature request
+    url: https://github.com/ishaanko/neuronaut/discussions/categories/ideas
+    about: New modes, bounty ideas and rule changes start as a discussion.
+  - name: Security issue
+    url: https://github.com/ishaanko/neuronaut/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.

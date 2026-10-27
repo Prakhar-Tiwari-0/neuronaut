@@ -1,0 +1,54 @@
+name: Neuron report
+description: A neuron does something worth knowing about, or its card looks wrong.
+title: "[Neuron]: L? N? "
+labels:
+  - neuron
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a neuron that turns the model into a pirate, or one whose rarity or words look wrong for what it does?
+        Good finds become bounties and help check the sweep.
+
+  - type: input
+    id: neuron
+    attributes:
+      label: Neuron
+      description: Layer and index, as on the card.
+      placeholder: L22 N2742
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of report
+      options:
+        - Interesting effect
+        - Card looks wrong (rarity, words, coherence)
+        - Works together with other neurons
+    validations:
+      required: true
+
+  - type: input
+    id: dose
+    attributes:
+      label: Dose
+      description: The push strength you saw it at. Cards use 0.6.
+      placeholder: "0.6"
+
+  - type: textarea
+    id: effect
+    attributes:
+      label: What it does
+      description: What changes in the replies, in a sentence or two.
+      placeholder: Every reply turns into a first-person account of being an alien intelligence.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A prompt and the steered reply. Add the other neurons and doses if it's a combination.
+      render: text
