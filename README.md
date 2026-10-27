@@ -7,6 +7,9 @@ Built on [neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) by
 [lyramakesmusic](https://github.com/lyramakesmusic), used with permission. The steering method, the steer lens and the
 neuron index come from that project.
 
+<!-- sweep:start -->
+<!-- sweep:end -->
+
 ## Modes
 
 - **Dex**: search the steer and logit lenses for free, spend a scan (12 a day) to see what a neuron does when pushed,
@@ -54,6 +57,9 @@ Then the worker, with `CONVEX_URL` and `WORKER_SECRET` in `worker/.env.local`:
 cd worker && set -a && . ./.env.local && set +a
 uv run python main.py --sweep    # --sweep: measure every neuron while no player job is waiting
 ```
+
+`worker/readme_progress.py` keeps the sweep section at the top of this README current, committing and pushing it every
+10 minutes until the sweep is done.
 
 The first start measures random-direction controls for every layer (cached in `worker/cache/`). Dailies and bounties
 are created by hourly crons, and the daily generator needs the worker running.
