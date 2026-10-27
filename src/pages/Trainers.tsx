@@ -7,7 +7,7 @@ export function Trainers() {
   const top = useQuery(api.players.leaderboard);
   return (
     <div>
-      <h1 className="font-pixel text-3xl">TRAINERS</h1>
+      <h1 className="font-pixel text-4xl">TRAINERS</h1>
       {top === undefined ? (
         <div className="py-6 text-faint">loading</div>
       ) : top.length === 0 ? (

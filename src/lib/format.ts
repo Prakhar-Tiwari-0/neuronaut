@@ -31,13 +31,20 @@ export function until(ms: number) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-export function heatColor(heat: number | null, correct = false) {
-  if (correct) return "text-good";
-  if (heat === null) return "text-faint";
-  if (heat >= 70) return "text-hot";
-  if (heat >= 45) return "text-warm";
-  if (heat >= 20) return "text-fg";
-  return "text-cool";
+// Heat as a fill color, Wordle-style: grey (cold), yellow, orange, red (hot), green for a hit. Fills only: the light
+// yellow isn't readable as text.
+export function heatBg(heat: number | null, correct = false) {
+  if (correct) return "bg-good";
+  if (heat === null) return "bg-raised";
+  if (heat >= 70) return "bg-hot";
+  if (heat >= 45) return "bg-warmer";
+  if (heat >= 20) return "bg-warm";
+  return "bg-cold";
+}
+
+// The share grid's emoji for one guess, matching heatBg.
+export function heatEmoji(heat: number, correct: boolean) {
+  return correct ? "🟩" : heat >= 70 ? "🟥" : heat >= 45 ? "🟧" : heat >= 20 ? "🟨" : "⬛";
 }
 
 // A daily guess's rank: exact inside the ladder's exact region, rounded past it (it's interpolated there).

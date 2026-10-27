@@ -6,7 +6,7 @@ export function How() {
   return (
     <div className="max-w-[720px] space-y-10 text-[15px] leading-relaxed">
       <div>
-        <h1 className="font-pixel text-3xl">HOW TO PLAY</h1>
+        <h1 className="font-pixel text-4xl">HOW TO PLAY</h1>
         <p className="mt-4 text-dim">
           {MODEL.name} has {MODEL.layers} layers of {MODEL.width.toLocaleString()} MLP neurons. Pushing one while the model
           writes changes what it says: some make it talk about the sea, some make it a doctor, most do almost nothing. Your job

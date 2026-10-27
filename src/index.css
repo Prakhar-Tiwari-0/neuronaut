@@ -1,34 +1,99 @@
 @import "tailwindcss";
-@import "@fontsource/geist-sans/400.css";
-@import "@fontsource/geist-sans/500.css";
-@import "@fontsource/geist-sans/600.css";
-@import "@fontsource/geist-mono/400.css";
-@import "@fontsource/geist-mono/500.css";
-@import "@fontsource/silkscreen/400.css";
+/* Latin only: the site has no other scripts, and the full packages pull in Cyrillic, Vietnamese and symbol subsets. */
+@import "@fontsource/geist-sans/latin-400.css";
+@import "@fontsource/geist-sans/latin-500.css";
+@import "@fontsource/geist-sans/latin-600.css";
+@import "@fontsource/geist-mono/latin-400.css";
+@import "@fontsource/geist-mono/latin-500.css";
+@import "@fontsource/silkscreen/latin-400.css";
 
+/* Theme colors are CSS variables so light (the default) and dark (html.dark) share every utility class. */
 @theme {
   --font-sans: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
   --font-pixel: "Silkscreen", "Geist Mono", monospace;
 
-  --color-bg: #000;
-  --color-fg: #fff;
-  --color-dim: #a1a1a1;
-  --color-faint: #5c5c5c;
-  --color-line: #1c1c1c;
-  --color-line-strong: #2e2e2e;
-  --color-raised: #0b0b0b;
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-fg: var(--fg);
+  --color-dim: var(--dim);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-raised: var(--raised);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
 
-  --color-legendary: #ffc93c;
-  --color-epic: #c48cff;
-  --color-rare: #4fc3f7;
-  --color-uncommon: #7ee08f;
-  --color-common: #8f8f8f;
-  --color-glitch: #ff4f8b;
-  --color-hot: #ff5a4f;
-  --color-warm: #ffa24f;
-  --color-cool: #6aa8ff;
-  --color-good: #7ee08f;
+  --color-legendary: var(--legendary);
+  --color-epic: var(--epic);
+  --color-rare: var(--rare);
+  --color-uncommon: var(--uncommon);
+  --color-common: var(--common);
+  --color-glitch: var(--glitch);
+
+  /* daily heat, Wordle-style: grey (cold), yellow, orange, red (hot), green (hit) */
+  --color-cold: var(--cold);
+  --color-warm: var(--warm);
+  --color-warmer: var(--warmer);
+  --color-hot: var(--hot);
+  --color-good: var(--good);
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+:root {
+  --bg: #f7f5f0;
+  --card: #ffffff;
+  --fg: #16130f;
+  --dim: #57524a;
+  --faint: #6f695f; /* still 4.5:1 on --bg */
+  --line: #e7e2d8;
+  --line-strong: #d3ccbf;
+  --raised: #efebe3;
+  --accent: #16130f;
+  --accent-fg: #ffffff;
+
+  --legendary: #a16207;
+  --epic: #7c3aed;
+  --rare: #0369a1;
+  --uncommon: #15803d;
+  --common: #57534e;
+  --glitch: #be185d;
+
+  --cold: #787c7e;
+  --warm: #c9b458;
+  --warmer: #e8843c;
+  --hot: #d9433b;
+  --good: #6aaa64;
+  color-scheme: light;
+}
+
+html.dark {
+  --bg: #000;
+  --card: #0a0a0a;
+  --fg: #fff;
+  --dim: #b4b4b4;
+  --faint: #8c8c8c;
+  --line: #1f1f1f;
+  --line-strong: #333;
+  --raised: #121212;
+  --accent: #fff;
+  --accent-fg: #000;
+
+  --legendary: #ffc93c;
+  --epic: #c48cff;
+  --rare: #4fc3f7;
+  --uncommon: #7ee08f;
+  --common: #a3a3a3;
+  --glitch: #ff4f8b;
+
+  --cold: #5f6366;
+  --warm: #b59f3b;
+  --warmer: #e07a2e;
+  --hot: #e5534b;
+  --good: #538d4e;
+  color-scheme: dark;
 }
 
 @layer base {
@@ -36,14 +101,13 @@
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
-    font-size: 14px;
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
-    color-scheme: dark;
   }
 
   ::selection {
-    background: #fff;
-    color: #000;
+    background: var(--color-fg);
+    color: var(--color-bg);
   }
 
   input,
@@ -56,15 +120,20 @@
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
   }
+
+  :focus-visible {
+    outline: 2px solid var(--color-fg);
+    outline-offset: 2px;
+  }
 }
 
 /* Model output: monospace on a faint scanline texture, static (no animation). */
 .screen {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.6;
   white-space: pre-wrap;
-  background-image: repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 3px);
+  background-image: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--fg) 3%, transparent) 0 1px, transparent 1px 3px);
 }
 
 /* A dithered square, the retro rarity mark. */
@@ -74,4 +143,105 @@
   height: 8px;
   background-color: currentColor;
   mask: conic-gradient(#000 25%, transparent 0 50%, #000 0 75%, transparent 0) 0 0 / 2px 2px;
+}
+
+/* ---------- motion ----------
+   Every animation here is feedback or a rare moment (a scored guess, a solve, a modal); nothing loops. */
+
+/* press feedback on anything pressable */
+.press {
+  transition: transform 160ms var(--ease-out);
+}
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* a scored guess: the heat bar fills from the left */
+.heat-fill {
+  transform-origin: left;
+  animation: heat-fill 300ms var(--ease-out) both;
+}
+@keyframes heat-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* a rejected guess */
+.shake {
+  animation: shake 320ms var(--ease-out);
+}
+@keyframes shake {
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+/* rare wins: a solved daily, a catch */
+.pop {
+  animation: pop 420ms var(--ease-out) both;
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.94);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+
+/* modals and their backdrop enter from just below full size, never from nothing */
+.modal-backdrop {
+  transition: opacity 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}
+.modal-panel {
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
+/* the share grid on the result card fills in one square at a time */
+.stagger > * {
+  animation: pop 300ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press:active:not(:disabled) {
+    transform: none;
+  }
+  .heat-fill,
+  .shake,
+  .pop,
+  .stagger > * {
+    animation: fade 200ms ease both;
+  }
+  .modal-panel {
+    @starting-style {
+      transform: none;
+    }
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
 }
