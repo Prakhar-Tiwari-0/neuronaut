@@ -76,3 +76,8 @@ node e2e/game.mjs [--url http://127.0.0.1:5173]
 
 It joins, scans and catches a neuron, solves today's daily and enters a bounty. Screenshots and `report.json` land in
 `e2e/artifacts/<timestamp>/`. On WSL without Chrome's system libraries, point `LD_LIBRARY_PATH` at a local copy.
+
+## License
+
+All rights reserved. The source is public to read, not to use: see [LICENSE](LICENSE). Ask in
+[Discussions](https://github.com/ishaanko/neuronaut/discussions) if you want to use it.
