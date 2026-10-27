@@ -16,7 +16,7 @@ from collections import Counter
 import numpy as np
 from convex import ConvexClient
 
-from engine import PROFILE_DOSE, Engine, distinct2, words
+from engine import PROFILE_DOSE, Engine, degenerate, distinct2, words
 from lens import Lens, norm
 
 MODEL = os.environ.get("GAME_MODEL", "Qwen/Qwen3.5-4B")
@@ -139,7 +139,7 @@ class Worker:
         texts, baseline = [], []
         for q in prompts:
             (s, ids), (b, _) = self.eng.generate(q, [[self.eng.push(l, n, PROFILE_DOSE)], []])
-            if not s or distinct2(ids) < 0.7:
+            if degenerate(s) or distinct2(ids) < 0.7:
                 return False
             texts.append(s)
             baseline.append(b)

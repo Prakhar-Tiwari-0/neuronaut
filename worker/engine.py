@@ -62,6 +62,15 @@ def distinct2(ids):
     return len(set(pairs)) / len(pairs) if pairs else 0.0
 
 
+RUN = re.compile(r"(\S{1,4}?)\1{9,}")  # one short visible unit repeated 10+ times in a row
+
+
+def degenerate(text):
+    """Empty, or contains a run like ",,,,,,,,,," or "hahahahahahahahahaha". Token distinct-2 misses these: a run of
+    commas tokenizes into different multi-comma pieces, so it scores as clean as normal prose."""
+    return not text or RUN.search(text) is not None
+
+
 def words(text):
     return [w.lower() for w in WORD.findall(text) if w.lower() not in STOP]
 
@@ -218,7 +227,7 @@ class Engine:
             bw = Counter(words(b["text"]))
             for r, (text, ids) in enumerate(gen):
                 texts[r].append(text)
-                d2[r] = min(d2[r], distinct2(ids) if text else 0.0)  # an empty reply counts as fully looped
+                d2[r] = min(d2[r], 0.0 if degenerate(text) else distinct2(ids))  # degenerate counts as fully looped
                 wc[r].update({w: c for w, c in Counter(words(text)).items() if c > bw[w] and w not in generic})
         k = len(base)
         return [{"texts": texts[r], "shift": shifts[r] / k, "nll": float(nll[r] / k), "distinct": float(d2[r]),
