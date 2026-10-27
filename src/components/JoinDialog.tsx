@@ -3,7 +3,7 @@ import { errorText } from "../lib/session";
 import { Button, ErrorLine, Input, Label } from "./ui";
 
 // Asks a newly signed-in user for the handle they'll play under.
-export function JoinDialog({ onJoin, onClose }: { onJoin: (handle: string) => Promise<void>; onClose: () => void }) {
+export function JoinDialog({ onJoin, onClose, onSignOut }: { onJoin: (handle: string) => Promise<void>; onClose: () => void; onSignOut: () => void }) {
   const [handle, setHandle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,6 +39,7 @@ export function JoinDialog({ onJoin, onClose }: { onJoin: (handle: string) => Pr
           <ErrorLine error={error} />
         </div>
         <div className="mt-3 flex justify-end">
+          <button type="button" className="mr-auto text-xs text-faint hover:text-fg" onClick={onSignOut}>sign out</button>
           <Button disabled={busy}>Start</Button>
         </div>
       </form>

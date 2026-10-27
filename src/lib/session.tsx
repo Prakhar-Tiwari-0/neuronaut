@@ -1,9 +1,10 @@
-import { useClerk } from "@clerk/react";
+import { useAuth, useClerk } from "@clerk/react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { JoinDialog } from "../components/JoinDialog";
+import { createAccountSetup } from "./accountSetup";
 
 export function errorText(e: unknown) {
   return e instanceof ConvexError ? String(e.data) : "Something went wrong. Try again.";
@@ -24,43 +25,32 @@ const Ctx = createContext<Session | null>(null);
 // Sign-in is Clerk; a player is a signed-in user who has picked a handle (players.join).
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const { isLoaded, sessionId } = useAuth();
   const clerk = useClerk();
   const me = useQuery(api.players.me, isAuthenticated ? {} : "skip");
   const join = useMutation(api.players.join);
-  const [pending, setPending] = useState<((ok: boolean) => void) | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setup] = useState(() => createAccountSetup(setSetupOpen, () => clerk.openSignIn()));
 
   // Right after a page load Convex hasn't confirmed the Clerk session yet, and the player row is still loading. A click
   // in that window must wait, not be read as "signed out" (Clerk ignores openSignIn for a signed-in user, so the
   // click would just vanish).
-  const now = useRef({ isAuthenticated, me });
-  now.current = { isAuthenticated, me };
-  const settled = !isLoading && (!isAuthenticated || me !== undefined);
-  const waiters = useRef<(() => void)[]>([]);
-  useEffect(() => {
-    if (!settled) return;
-    waiters.current.forEach((w) => w());
-    waiters.current = [];
-  }, [settled]);
+  useLayoutEffect(() => {
+    setup.mount();
+    return () => setup.dispose();
+  }, [setup]);
+  useLayoutEffect(() => {
+    setup.update({
+      identity: isLoaded ? sessionId ?? null : undefined,
+      authenticated: isAuthenticated,
+      loading: isLoading,
+      player: me === undefined ? undefined : !!me,
+    });
+  }, [setup, isLoaded, sessionId, isAuthenticated, isLoading, me]);
 
-  const requireJoin = useCallback(async () => {
-    if (!settled) await new Promise<void>((r) => waiters.current.push(r));
-    const { isAuthenticated, me } = now.current;
-    if (me) return true;
-    if (!isAuthenticated) {
-      clerk.openSignIn();
-      return false;
-    }
-    return new Promise<boolean>((resolve) => setPending(() => resolve));
-  }, [settled, clerk]);
-
-  // Ask for a handle as soon as a new user signs in, not on their first action.
-  useEffect(() => {
-    if (isAuthenticated && me === null) setPending((p: ((ok: boolean) => void) | null) => p ?? (() => {}));
-  }, [isAuthenticated, me]);
-
-  const finish = (ok: boolean) => {
-    pending?.(ok);
-    setPending(null);
+  const signOut = () => {
+    setup.cancel();
+    void clerk.signOut();
   };
 
   return (
@@ -68,19 +58,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       value={{
         signedIn: isAuthenticated,
         me: isAuthenticated ? me : null,
-        requireJoin,
+        requireJoin: () => setup.request(),
         signIn: () => clerk.openSignIn(),
-        signOut: () => clerk.signOut(),
+        signOut,
       }}
     >
       {children}
-      {pending && isAuthenticated && me === null && (
+      {setupOpen && isAuthenticated && me === null && (
         <JoinDialog
-          onJoin={async (handle) => {
-            await join({ handle });
-            finish(true);
-          }}
-          onClose={() => finish(false)}
+          key={sessionId}
+          onJoin={(handle) => setup.submit(() => join({ handle }))}
+          onClose={() => setup.cancel()}
+          onSignOut={signOut}
         />
       )}
     </Ctx.Provider>

@@ -45,9 +45,12 @@ export function Nav() {
               </button>
             </>
           ) : signedIn ? (
-            <button className="text-dim hover:text-fg" onClick={() => requireJoin()}>
-              Pick a handle
-            </button>
+            <>
+              <button className="text-dim hover:text-fg" onClick={() => requireJoin()}>
+                Pick a handle
+              </button>
+              <button className="text-faint hover:text-fg" onClick={signOut}>sign out</button>
+            </>
           ) : (
             <button className="text-dim hover:text-fg" onClick={signIn}>
               Sign in
