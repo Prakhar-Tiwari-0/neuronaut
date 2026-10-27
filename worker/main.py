@@ -43,7 +43,8 @@ def as_profile(p):
 
 class Worker:
     def __init__(self, url, secret):
-        self.c, self.secret = ConvexClient(url), secret
+        self.url, self.secret = url, secret
+        self.c = ConvexClient(url)
         self.eng = Engine(MODEL)
         self.lens = Lens()
 
@@ -208,6 +209,9 @@ def main():
         except Exception:  # Convex unreachable and the like: keep the model loaded and retry
             traceback.print_exc()
             time.sleep(10)
+            # a client whose connection died ("channel closed") hangs on every later call, so start a fresh one; its
+            # first call waits until the backend is back
+            w.c = ConvexClient(w.url)
 
 
 if __name__ == "__main__":
