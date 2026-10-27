@@ -4,7 +4,7 @@ import { api } from "../../convex/_generated/api";
 import { LensSearch } from "../components/LensSearch";
 import { Replies } from "../components/Replies";
 import { Button, ErrorLine, HeatBar, Label, NeuronInput, NeuronLink } from "../components/ui";
-import { heatColor } from "../lib/format";
+import { heatColor, rankText } from "../lib/format";
 import { errorText, useSession } from "../lib/session";
 
 function shareText(number: number, guesses: number, limit: number, solved: boolean, heats: number[]) {
@@ -133,7 +133,7 @@ export function Daily() {
                       </span>
                     )}
                   </td>
-                  <td className="py-1.5 text-right text-dim">{g.status === "pending" ? "" : g.correct ? "1" : g.rank ? `#${g.rank}` : ">256"}</td>
+                  <td className="py-1.5 text-right text-dim">{g.status === "pending" || g.rank === null ? "" : g.correct ? "hit" : rankText(g.rank)}</td>
                 </tr>
               ))}
             </tbody>

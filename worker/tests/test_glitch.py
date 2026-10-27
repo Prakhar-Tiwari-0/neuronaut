@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from engine import degenerate
+from text import degenerate
 
 REPLIES = json.load(open(os.path.join(os.path.dirname(__file__), "sweep_replies.json")))
 

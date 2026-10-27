@@ -51,11 +51,9 @@ class Lens:
         """Whether searching `word` puts neuron (l, n) in the top `within`: neurons whose steer lens holds the word at
         an earlier position (ties broken against the answer) rank ahead of it."""
         ids = self.term_ids(word)
-        if not len(ids):
+        if not len(ids) or not np.isin(self.steer[l, n], ids).any():  # cheap check first: most words miss
             return False
         hit = np.isin(self.steer, ids)  # [L, N, 12]
-        if not hit[l, n].any():
-            return False
         pos = np.where(hit.any(-1), hit.argmax(-1), 99)
         return int((pos <= pos[l, n]).sum()) <= within
 

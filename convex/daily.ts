@@ -8,6 +8,8 @@ import {
   addDays,
   cosine,
   dailyNumber,
+  heat,
+  ladderRank,
   neuronKey,
   playerFor,
   requirePlayer,
@@ -66,14 +68,14 @@ export const current = query({
   },
 });
 
-// Scores one guess against the daily. heat = 100 x cosine between the two neurons' effects; rank = where it would sit
-// among the answer's nearest measured neurons (null past the top 256).
+// Scores one guess against the daily: rank = how many measured neurons are closer to the answer's effect, plus one;
+// heat = that rank on a 0-99 log scale (rules.ts).
 async function resolve(ctx: MutationCtx, g: Doc<"guesses">, embedding: number[], daily: Doc<"dailies">) {
   const cos = cosine(embedding, daily.embedding);
   const correct = g.key === daily.key || cos >= SOLVE_COS;
-  const above = daily.neighbors.filter((c) => c > cos).length;
-  const rank = correct ? 0 : above < daily.neighbors.length ? above + 1 : null;
-  await ctx.db.patch(g._id, { status: "done", heat: Math.round(cos * 100), rank, correct });
+  const rank = correct ? 0 : ladderRank(daily.ladder, cos);
+  const total = daily.ladder.ranks[daily.ladder.ranks.length - 1] ?? 1;
+  await ctx.db.patch(g._id, { status: "done", heat: correct ? 100 : heat(rank, total), rank, correct });
   await settle(ctx, g.playerId, daily);
 }
 

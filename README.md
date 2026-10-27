@@ -74,7 +74,10 @@ terminal's cgroup and die with it, so they don't work here.
 node e2e/game.mjs [--url http://127.0.0.1:5173]
 ```
 
-It joins, scans and catches a neuron, solves today's daily and enters a bounty. Screenshots and `report.json` land in
+Unit tests cover the logic that's hard to see from the UI: `bun run test` (backend, through `convex-test`) and
+`cd worker && uv run pytest` (glitch detection, the sweep store).
+
+The E2E joins, scans and catches a neuron, solves today's daily and enters a bounty. Screenshots and `report.json` land in
 `e2e/artifacts/<timestamp>/`. On WSL without Chrome's system libraries, point `LD_LIBRARY_PATH` at a local copy.
 
 ## License

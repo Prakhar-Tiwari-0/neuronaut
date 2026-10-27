@@ -1,4 +1,4 @@
-import type { Rarity } from "../../convex/rules";
+import { LADDER_EXACT, type Rarity } from "../../convex/rules";
 
 export const RARITY_COLOR: Record<Rarity, string> = {
   legendary: "text-legendary",
@@ -38,4 +38,10 @@ export function heatColor(heat: number | null, correct = false) {
   if (heat >= 45) return "text-warm";
   if (heat >= 20) return "text-fg";
   return "text-cool";
+}
+
+// A daily guess's rank: exact inside the ladder's exact region, rounded past it (it's interpolated there).
+export function rankText(rank: number) {
+  if (rank <= LADDER_EXACT) return `#${rank}`;
+  return `~#${rank < 10_000 ? (rank / 1000).toFixed(1) : Math.round(rank / 1000)}k`;
 }

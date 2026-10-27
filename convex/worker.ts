@@ -1,11 +1,10 @@
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { refundPending, resolvePending } from "./daily";
-import { bumpStats } from "./jobs";
+import { bumpStats, globalStats } from "./jobs";
 import { checkWorker, neuronKey, rarity, today } from "./lib";
-import { push } from "./schema";
+import { ladder, push } from "./schema";
 
 // The GPU worker's API (worker/main.py). Every call carries WORKER_SECRET.
 
@@ -110,16 +109,6 @@ export const putPar = mutation({
   },
 });
 
-// The nearest measured neurons to an embedding (cosines, descending), for the daily generator's ambiguity check.
-export const nearest = action({
-  args: { secret: v.string(), embedding: v.array(v.float64()), limit: v.number() },
-  handler: async (ctx, { secret, embedding, limit }) => {
-    checkWorker(secret);
-    const hits = await ctx.vectorSearch("profiles", "by_embedding", { vector: embedding, limit });
-    return hits.map((h) => h._score);
-  },
-});
-
 const dailyArgs = {
   id: v.id("jobs"),
   date: v.string(),
@@ -133,50 +122,41 @@ const dailyArgs = {
   hint: v.string(),
 };
 
-// Stores a generated puzzle along with the cosines of the answer's 256 nearest measured neurons (for guess ranks).
-export const putDaily = action({
-  args: { secret: v.string(), ...dailyArgs },
-  handler: async (ctx, { secret, ...d }) => {
+// Stores a generated puzzle. The worker computes its ladder against the full sweep, which only it holds.
+export const putDaily = mutation({
+  args: { secret: v.string(), ...dailyArgs, ladder },
+  handler: async (ctx, { secret, id, ...d }) => {
     checkWorker(secret);
-    const key = neuronKey(d.layer, d.n);
-    const hits = await ctx.vectorSearch("profiles", "by_embedding", { vector: d.embedding, limit: 256 });
-    const neighbors = hits.map((h) => h._score).filter((s) => s < 0.9999);
-    await ctx.runMutation(internal.worker.insertDaily, { ...d, key, neighbors });
-  },
-});
-
-export const insertDaily = internalMutation({
-  args: { ...dailyArgs, key: v.string(), neighbors: v.array(v.number()) },
-  handler: async (ctx, { id, ...d }) => {
-    if (!(await ctx.db.query("dailies").withIndex("by_date", (q) => q.eq("date", d.date)).unique())) await ctx.db.insert("dailies", d);
+    if (!(await ctx.db.query("dailies").withIndex("by_date", (q) => q.eq("date", d.date)).unique()))
+      await ctx.db.insert("dailies", { ...d, key: neuronKey(d.layer, d.n) });
     await ctx.db.patch(id, { status: "done" });
   },
 });
 
-export const upcomingDailies = internalQuery({
-  args: { from: v.string() },
-  handler: async (ctx, { from }) =>
-    (await ctx.db.query("dailies").withIndex("by_date", (q) => q.gte("date", from)).collect()).map((d) => ({ id: d._id, embedding: d.embedding })),
-});
-
-export const setNeighbors = internalMutation({
-  args: { id: v.id("dailies"), neighbors: v.array(v.number()) },
-  handler: async (ctx, { id, neighbors }) => {
-    await ctx.db.patch(id, { neighbors });
+// Today's and future puzzles, so the worker can recompute their ladders as the sweep fills in.
+export const upcomingDailies = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkWorker(secret);
+    const ds = await ctx.db.query("dailies").withIndex("by_date", (q) => q.gte("date", today())).collect();
+    return ds.map((d) => ({ id: d._id, layer: d.layer, n: d.n, embedding: d.embedding }));
   },
 });
 
-// Recomputes today's and future puzzles' neighbor cosines against everything measured so far. Ranks are only as good
-// as the sweep's coverage when the puzzle was made, so the worker calls this as the sweep fills in.
-export const refreshNeighbors = action({
-  args: { secret: v.string() },
-  handler: async (ctx, { secret }): Promise<number> => {
+export const setLadder = mutation({
+  args: { secret: v.string(), id: v.id("dailies"), ladder },
+  handler: async (ctx, { secret, id, ladder }) => {
     checkWorker(secret);
-    const ds = await ctx.runQuery(internal.worker.upcomingDailies, { from: today() });
-    for (const d of ds) {
-      const hits = await ctx.vectorSearch("profiles", "by_embedding", { vector: d.embedding, limit: 256 });
-      await ctx.runMutation(internal.worker.setNeighbors, { id: d.id, neighbors: hits.map((h) => h._score).filter((s) => s < 0.9999) });
-    }
-    return ds.length;
+    await ctx.db.patch(id, { ladder });
+  },
+});
+
+// How many neurons the sweep has measured, for the dex header.
+export const putSwept = mutation({
+  args: { secret: v.string(), swept: v.number() },
+  handler: async (ctx, { secret, swept }) => {
+    checkWorker(secret);
+    const s = await globalStats(ctx);
+    if (s) await ctx.db.patch(s._id, { swept });
   },
 });

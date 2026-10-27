@@ -27,8 +27,11 @@ Split independent fixes into separate PRs, even small ones. Include everything t
 Say what you ran and what you saw. "Tests pass" on its own isn't enough.
 
 - **Game behavior:** run `node e2e/game.mjs` against a local stack. If your change adds a behavior worth protecting,
-  add a step to it. We don't take mocked unit suites for the backend: a fake Convex doesn't check the real validators
-  or indexes, and that's where the bugs have been.
+  add a step to it.
+- **Logic that's hard to see from the UI** (ranks, settlement, glitch detection): add a unit test that names the
+  failure it catches. `bun run test` runs real Convex functions through `convex-test`, and `cd worker && uv run pytest`
+  covers the worker. We don't take hand-rolled fakes of Convex: they skip the real validators and indexes, which is
+  where the bugs have been.
 - **UI:** add before/after screenshots to the PR. Don't commit them.
 - **Worker:** say which GPU you ran it on, and include before/after numbers if it changes what gets measured or how
   fast.

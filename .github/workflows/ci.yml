@@ -27,5 +27,11 @@ jobs:
       - name: Typecheck and build the client
         run: bun run build
       - run: bun run lint
-      - name: Compile the worker
-        run: python3 -m py_compile worker/*.py
+      - name: Backend unit tests
+        run: bun run test
+      - name: Worker unit tests
+        working-directory: worker
+        run: |
+          python3 -m pip install --quiet numpy pytest
+          python3 -m py_compile *.py
+          python3 -m pytest -q tests

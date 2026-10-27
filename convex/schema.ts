@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const push = v.object({ layer: v.number(), n: v.number(), dose: v.number() });
+export const ladder = v.object({ ranks: v.array(v.number()), cos: v.array(v.float64()) }); // see rules.ts ladderRank
 
 export default defineSchema({
   // One row, "global": totals and the dex coverage grid (layers x COVERAGE_BINS catch counts).
@@ -9,6 +10,7 @@ export default defineSchema({
   stats: defineTable({
     name: v.string(),
     profiled: v.number(),
+    swept: v.optional(v.number()), // neurons the worker's sweep has measured (they live in its local store, not here)
     caught: v.number(),
     coverage: v.array(v.number()),
     prompts: v.optional(v.array(v.string())),
@@ -110,7 +112,7 @@ export default defineSchema({
     texts: v.array(v.string()),
     baseline: v.array(v.string()),
     embedding: v.array(v.float64()),
-    neighbors: v.array(v.number()), // cosines of the answer's nearest profiled neurons, descending
+    ladder, // how close every measured neuron is to the answer, sampled by rank: guess ranks and heat come from it
     band: v.array(v.number()), // [lo, hi] layers, a hint
     hint: v.string(), // the answer's top steer token, a hint
   }).index("by_date", ["date"]),

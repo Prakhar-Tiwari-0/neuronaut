@@ -25,6 +25,7 @@ import torch
 from transformers.cache_utils import LinearAttentionLayer
 
 from spec import Spec
+from text import degenerate, distinct2  # noqa: F401  (main.py imports them from here)
 
 PROFILE_PROMPTS = ["Who are you?", "Describe your perfect day.", "Tell me a short story.", "What should I cook tonight?"]
 PROFILE_DOSE = 0.6
@@ -55,20 +56,6 @@ def _assign_recurrent_state(self, recurrent_states, state_idx=0, **kwargs):
 
 
 LinearAttentionLayer.update_recurrent_state = _assign_recurrent_state
-
-
-def distinct2(ids):
-    pairs = list(zip(ids, ids[1:]))
-    return len(set(pairs)) / len(pairs) if pairs else 0.0
-
-
-RUN = re.compile(r"(\S{1,4}?)\1{9,}")  # one short visible unit repeated 10+ times in a row
-
-
-def degenerate(text):
-    """Empty, or contains a run like ",,,,,,,,,," or "hahahahahahahahahaha". Token distinct-2 misses these: a run of
-    commas tokenizes into different multi-comma pieces, so it scores as clean as normal prose."""
-    return not text or RUN.search(text) is not None
 
 
 def words(text):

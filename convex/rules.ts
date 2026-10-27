@@ -51,3 +51,27 @@ export function cosine(a: number[], b: number[]) {
   for (let i = 0; i < a.length; i++) s += a[i] * b[i];
   return s; // both unit length
 }
+
+// Daily ranks. The worker samples how close every measured neuron is to the answer (worker/store.py `ladder`): every
+// cosine down to rank LADDER_EXACT, then one per power of two, then the farthest.
+export const LADDER_EXACT = 1024;
+export type Ladder = { ranks: number[]; cos: number[] };
+
+// Where a guess with this cosine to the answer sits among all measured neurons (1 = closest). Exact inside the top
+// LADDER_EXACT; past that, interpolated on a log scale between the two ladder points around it.
+export function ladderRank({ ranks, cos }: Ladder, c: number): number {
+  const above = cos.filter((x) => x > c).length; // cos is sorted high to low
+  if (above === 0) return 1;
+  if (above === cos.length) return ranks[ranks.length - 1];
+  const [ra, rb, ca, cb] = [ranks[above - 1], ranks[above], cos[above - 1], cos[above]];
+  if (rb - ra === 1) return rb;
+  const t = ca === cb ? 1 : (ca - c) / (ca - cb);
+  return Math.round(Math.exp(Math.log(ra) + t * (Math.log(rb) - Math.log(ra))));
+}
+
+// 0-99 from a rank among `total` neurons, on a log scale: a random guess is about 5, the top 500 about 50, the closest
+// wrong guess 99. A correct guess shows as a hit, not a heat.
+export function heat(rank: number, total: number): number {
+  if (total <= 1) return 99;
+  return Math.max(0, Math.min(99, Math.round(100 * (1 - Math.log(rank) / Math.log(total)))));
+}
