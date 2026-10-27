@@ -1,9 +1,9 @@
 """Keeps the README's sweep section current: every INTERVAL seconds, reads the worker log, rewrites the block between the
 sweep markers, and commits and pushes README.md alone. Exits once the sweep is done.
 
-    setsid nohup python3 worker/readme_progress.py >> logs/readme_progress.log 2>&1 &
+    python3 worker/readme_progress.py    # from the repo root; ./up.sh runs it as a service
 
-Run from the repo root. Needs no venv.
+Needs no venv.
 """
 import os
 import re

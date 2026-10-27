@@ -66,6 +66,10 @@ uv run python main.py --sweep    # --sweep: measure every neuron while no player
 `worker/readme_progress.py` keeps the sweep section at the top of this README current, committing and pushing it every
 10 minutes until the sweep is done.
 
+To leave it running, `./up.sh` starts Convex, Vite, the sweeping worker and the README updater as systemd user services
+instead (logs in `logs/`, `./up.sh stop` to stop). They survive the shell that started them and restart on a crash;
+`nohup` or `setsid` don't escape a terminal or agent session's cgroup, so those get killed when it closes.
+
 The first start measures random-direction controls for every layer (cached in `worker/cache/`). Dailies and bounties
 are created by hourly crons, and the daily generator needs the worker running.
 
