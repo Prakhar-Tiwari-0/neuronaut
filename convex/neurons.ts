@@ -150,7 +150,7 @@ export const catchNeuron = action({
   handler: async (ctx, args): Promise<{ points: number; rarity: string; uniqueness: number }> => {
     const name = args.name.trim().replace(/\s+/g, " ");
     if (name.length < 2 || name.length > 24) throw new ConvexError("Names are 2-24 characters");
-    const { embedding } = await ctx.runQuery(internal.neurons.catchCheck, args);
+    const { embedding } = await ctx.runQuery(internal.neurons.catchCheck, { token: args.token, layer: args.layer, n: args.n });
     const near = await ctx.vectorSearch("profiles", "by_embedding", { vector: embedding, limit: 1, filter: (q) => q.eq("caught", true) });
     const uniqueness = Math.min(1, Math.max(0, 1 - (near[0]?._score ?? 0)));
     return await ctx.runMutation(internal.neurons.catchCommit, { ...args, name, uniqueness: Math.round(uniqueness * 1000) / 1000 });

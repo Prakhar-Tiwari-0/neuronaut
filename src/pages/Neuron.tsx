@@ -133,7 +133,7 @@ export function Neuron() {
               <Label>Catch</Label>
               <p className="mt-2 text-xs text-dim">Catching names it for everyone. Unique effects score more.</p>
               <div className="mt-3 flex items-center gap-2">
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={p.words[0] ?? "name"} maxLength={24} className="w-64" />
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={p.words[0] ?? "name"} maxLength={24} className="w-64" aria-label="name" />
                 <Button disabled={busy || (!!me && me.catchesLeft <= 0)}>Catch</Button>
                 {me && <span className="font-mono text-xs text-dim">{me.catchesLeft} left today</span>}
               </div>
