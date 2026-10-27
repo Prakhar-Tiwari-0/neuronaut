@@ -1,4 +1,4 @@
-import { useClerk } from "@clerk/react";
+import { useAuth, useClerk } from "@clerk/react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
@@ -25,6 +25,7 @@ const Ctx = createContext<Session | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const clerk = useClerk();
+  const { sessionId } = useAuth();
   const me = useQuery(api.players.me, isAuthenticated ? {} : "skip");
   const join = useMutation(api.players.join);
   // Every action waiting on a handle, not just the latest: they all settle together when the dialog closes.
@@ -68,10 +69,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (isAuthenticated && me === null) setAsking(true);
   }, [isAuthenticated, me]);
 
-  // Signing out (here or in another tab) drops whatever was waiting on a handle.
+  // A handle picked in another tab releases the actions waiting here.
   useEffect(() => {
-    if (settled && !isAuthenticated && joiners.current.size) finish(false);
-  }, [settled, isAuthenticated, finish]);
+    if (me && joiners.current.size) finish(true);
+  }, [me, finish]);
+
+  // Signing out, here or in another tab, drops whatever was waiting on a handle. So does switching to another
+  // account: its actions belong to the account that started them.
+  const lastSession = useRef(sessionId);
+  useEffect(() => {
+    const switched = lastSession.current != null && sessionId !== lastSession.current;
+    lastSession.current = sessionId;
+    if (joiners.current.size && (switched || (settled && !isAuthenticated))) finish(false);
+  }, [sessionId, settled, isAuthenticated, finish]);
 
   const signOut = () => {
     finish(false);
