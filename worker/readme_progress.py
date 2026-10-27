@@ -15,7 +15,7 @@ INTERVAL = 600
 STALL = 300  # seconds without a new sweep line before the README says it's stalled
 LOG, README = "logs/worker.log", "README.md"
 START, END = "<!-- sweep:start -->", "<!-- sweep:end -->"
-LINE = re.compile(r"^sweep (\d+)/(\d+) \(\+[\d.]+\) ([\d.]+)s$", re.M)
+LINE = re.compile(r"^sweep (\d+)/(\d+) \(\+[\d.]+\) ([\d.]+)s\b", re.M)
 
 
 def utc(ts):

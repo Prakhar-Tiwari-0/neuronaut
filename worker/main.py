@@ -9,12 +9,15 @@ the sweep already measured is answered from it with no GPU work, and daily ranks
 """
 import argparse
 import os
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # less fragmentation, so batches keep fitting
 import random
 import time
 import traceback
 from collections import Counter
 
 import numpy as np
+import torch
 from convex import ConvexClient
 
 from engine import PROFILE_DOSE, Engine, degenerate, distinct2, words
@@ -197,7 +200,10 @@ class Worker:
         self.store.put(res)
         nxt = min(cur + size, len(order))
         open(path, "w").write(str(nxt))
-        print(f"sweep {nxt}/{len(order)} (+{len(res)}) {time.time() - t:.1f}s", flush=True)
+        gib = 2 ** 30
+        print(f"sweep {nxt}/{len(order)} (+{len(res)}) {time.time() - t:.1f}s "
+              f"mem {torch.cuda.max_memory_allocated() / gib:.1f}/{torch.cuda.memory_reserved() / gib:.1f}G", flush=True)
+        torch.cuda.reset_peak_memory_stats()
         if nxt >= len(order) or (cur // size + 1) % LADDER_EVERY == 0:
             self.refresh_ladders()
         elif (cur // size) % 10 == 0:
@@ -227,6 +233,9 @@ class Worker:
             jobs = self.call("mutation", "worker:claim", max=24)
             if jobs:
                 self.run(jobs)
+                # judging and par searches batch wider than the sweep; give that memory back, or the sweep's next
+                # batch no longer fits in VRAM and WSL spills it to system RAM (~7x slower, no error)
+                torch.cuda.empty_cache()
             elif not (state and self.sweep_batch(state)):
                 self.wait()
 
