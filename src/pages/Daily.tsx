@@ -166,13 +166,10 @@ export function Daily() {
   // The header and directions don't wait for the puzzle, so the page paints at once.
   const header = (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+      <div>
         <h1 className="font-pixel text-4xl">DAILY{d ? ` #${d.number}` : ""}</h1>
-        {d && (
-          <span className="text-dim">
-            {d.date} · {d.solvers} of {d.players} solved
-          </span>
-        )}
+        {/* always rendered, so the line's arrival doesn't push the page down */}
+        <div className="mt-1 h-6 text-dim">{d ? `${d.date} · ${d.solvers} of ${d.players} solved` : "\u00a0"}</div>
       </div>
       <Steps
         steps={[

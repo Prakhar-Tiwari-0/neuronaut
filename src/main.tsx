@@ -8,10 +8,10 @@ import "./index.css";
 import { Nav } from "./components/Nav";
 import { SessionProvider } from "./lib/session";
 import { useIsDark } from "./lib/theme";
+import { Daily } from "./pages/Daily";
 import { Home } from "./pages/Home";
 
-// Every page but the home page loads on first visit, so the first paint ships only the shell and Home.
-const Daily = lazy(() => import("./pages/Daily").then((m) => ({ default: m.Daily })));
+// Home and the daily (the main game) ship in the first bundle; the other pages load on first visit.
 const Dex = lazy(() => import("./pages/Dex").then((m) => ({ default: m.Dex })));
 const Neuron = lazy(() => import("./pages/Neuron").then((m) => ({ default: m.Neuron })));
 const Bounties = lazy(() => import("./pages/Bounties").then((m) => ({ default: m.Bounties })));

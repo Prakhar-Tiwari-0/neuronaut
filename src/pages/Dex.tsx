@@ -2,7 +2,7 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { MODEL, RARITIES, type Rarity } from "../../convex/rules";
+import { LIMITS, MODEL, RARITIES, type Rarity } from "../../convex/rules";
 import { Coverage } from "../components/Coverage";
 import { LensSearch } from "../components/LensSearch";
 import { Button, ErrorLine, Label, NeuronInput, NeuronLink, RarityTag, Steps, Tokens } from "../components/ui";
@@ -47,8 +47,8 @@ export function Dex() {
         <Steps
           steps={[
             <>Find a neuron: search a word below, or scan a random one.</>,
-            <>Scan it ({me ? `${me.scansLeft} left today` : "12 a day"}) to see what it does and how rare it is.</>,
-            <>Catch it to make it yours ({me ? `${me.catchesLeft} left today` : "3 a day"}). Rarer and more unique scores more.</>,
+            <>Scan it ({LIMITS.scans} a day) to see what it does and how rare it is.</>,
+            <>Catch it to make it yours ({LIMITS.catches} a day). Rarer and more unique scores more.</>,
           ]}
         />
       </div>
@@ -61,7 +61,10 @@ export function Dex() {
             doScan(false);
           }}
         >
-          <Label>Scan a neuron</Label>
+          <div className="flex items-baseline justify-between">
+            <Label>Scan a neuron</Label>
+            <span className="text-sm text-dim">{me ? `${me.scansLeft} scans, ${me.catchesLeft} catches left today` : "\u00a0"}</span>
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <NeuronInput layer={layer} n={n} onLayer={setLayer} onN={setN} />
             <Button>Scan</Button>
