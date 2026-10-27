@@ -20,7 +20,7 @@ from engine import PROFILE_DOSE, Engine, distinct2, words
 from lens import Lens, norm
 
 MODEL = os.environ.get("GAME_MODEL", "Qwen/Qwen3.5-4B")
-RARE_Z, GLITCH_NLL, GLITCH_DISTINCT = 3.5, 3.2, 0.5  # mirrors convex/lib.ts
+RARE_Z, GLITCH_NLL, GLITCH_DISTINCT = 3.5, 3.2, 0.5  # mirrors convex/rules.ts
 DISPLAY_PROMPTS = [  # daily puzzle prompts: never the profile prompts, so a card's text can't be matched verbatim
     "What do you think about on a rainy afternoon?",
     "Write a short note to a friend.",
