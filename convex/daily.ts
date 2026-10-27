@@ -31,7 +31,9 @@ export function dailyPoints(guesses: number) {
 export const current = query({
   args: { token: v.optional(v.string()), date: v.optional(v.string()) },
   handler: async (ctx, { token, date }) => {
-    const d = date ?? today();
+    const now = today();
+    const d = date ?? now;
+    if (d > now) return null; // puzzles are generated days ahead; their clues stay hidden until their date
     const daily = await dailyFor(ctx, d);
     if (!daily) return null;
     const player = await playerFor(ctx, token);
