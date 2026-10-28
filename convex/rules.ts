@@ -2,7 +2,7 @@ import { ConvexError } from "convex/values";
 
 // Game rules, shared by the client and the server (no server imports here).
 export const MODEL = { name: "Qwen3.5-4B", id: "Qwen/Qwen3.5-4B", layers: 32, width: 9216 };
-export const LIMITS = { scans: 12, catches: 3, guesses: 15, entries: 8 };
+export const LIMITS = { scans: 12, catches: 3, guesses: 15, entries: 8, experiments: 5 };
 // GPU budget: jobs one player can have waiting at once, and players' jobs waiting in total before new ones are refused.
 export const GPU = { perPlayer: 4, queue: 200 };
 export const HINTS = { band: 5, token: 10 }; // daily hints unlock after this many guesses

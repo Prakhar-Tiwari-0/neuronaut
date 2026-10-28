@@ -23,8 +23,9 @@ export function How() {
       <section>
         <Label className="mb-2">Dex</Label>
         <p>
-          You get {LIMITS.scans} scans a day. A scan runs the model with the neuron pushed and reveals its replies and rarity.
-          You can catch {LIMITS.catches} scanned neurons a day, and each neuron has one owner, forever. A catch is worth its
+          You get {LIMITS.scans} scans a day. Before a scan you predict what the push will do (barely anything, change the tone
+          or topic, push its own words, or break the text), and a right call scores. The scan runs the model with the neuron
+          pushed and reveals its replies, rarity and place on the map. You can catch {LIMITS.catches} scanned neurons a day, and each neuron has one owner, forever. A catch is worth its
           rarity's points times one plus its uniqueness, so a neuron unlike anything already caught is worth up to double.
         </p>
         <div className="mt-3 grid grid-cols-3 gap-y-1.5">

@@ -77,6 +77,8 @@ class Worker:
             self.guard([j], lambda js: self.par(js[0]))
         for j in by.get("daily", []):
             self.guard([j], lambda js: self.daily(js[0]))
+        for j in by.get("combo", []):
+            self.guard([j], lambda js: self.combo(js[0]))
 
     def guard(self, jobs, fn):
         try:
@@ -95,6 +97,24 @@ class Worker:
         res = list(known.values()) + fresh
         self.call("mutation", "worker:putProfiles", jobIds=[j["id"] for j in jobs], profiles=[as_profile(p) for p in res])
         print(f"profiled {len(res)} in {time.time() - t:.1f}s", flush=True)
+
+    def combo(self, job):
+        """A lab experiment: two pushes alone and together on the profile prompts. Each shift has the generic part any
+        push of that size causes taken out (the random-direction mean at its layer, scaled by the dose's size), so what's compared
+        is the neurons' own effects. additivity: cosine of the joint effect with the sum of the separate ones (1 = they
+        just add up). gain: the joint effect's size over the sum's. towardA/B: the joint effect's cosine with each alone."""
+        a = job["args"]
+        (la, na, da), (lb, nb, db) = [(int(p["layer"]), int(p["n"]), float(p["dose"])) for p in (a["a"], a["b"])]
+        pa, pb = self.eng.push(la, na, da), self.eng.push(lb, nb, db)
+        ma, mb, mab = self.eng.measure([[pa], [pb], [pa, pb]])
+        ga, gb = self.eng.ctrl_mean[la] * (abs(da) / PROFILE_DOSE), self.eng.ctrl_mean[lb] * (abs(db) / PROFILE_DOSE)
+        ea, eb, eab = ma["shift"] - ga, mb["shift"] - gb, mab["shift"] - ga - gb
+        cos = lambda x, y: round(float(torch.nn.functional.cosine_similarity(x.float(), y.float(), dim=0)), 3)
+        total = ea + eb
+        self.call("mutation", "worker:finishCombo", id=job["id"], experimentId=a["experimentId"], texts=mab["texts"],
+                  additivity=cos(eab, total), gain=round(float(eab.norm() / total.norm().clamp(min=1e-6)), 3),
+                  towardA=cos(eab, ea), towardB=cos(eab, eb))
+        print(f"combo L{la}N{na} + L{lb}N{nb}: additivity {cos(eab, total)}", flush=True)
 
     def judge(self, job):
         a = job["args"]

@@ -14,6 +14,7 @@ import type * as bountyPool from "../bountyPool.js";
 import type * as crons from "../crons.js";
 import type * as daily from "../daily.js";
 import type * as jobs from "../jobs.js";
+import type * as lab from "../lab.js";
 import type * as lib from "../lib.js";
 import type * as map from "../map.js";
 import type * as neurons from "../neurons.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   daily: typeof daily;
   jobs: typeof jobs;
+  lab: typeof lab;
   lib: typeof lib;
   map: typeof map;
   neurons: typeof neurons;

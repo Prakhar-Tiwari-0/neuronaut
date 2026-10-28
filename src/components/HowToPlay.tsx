@@ -48,10 +48,14 @@ export function HowToPlay({ open, onClose }: { open: boolean; onClose: () => voi
 
       <div className="mt-6 space-y-2 border-t border-line pt-5 text-[15px] leading-relaxed">
         <p>
-          <b>Dex.</b> Scan neurons to see what they do and how rare they are, then catch the best ones. Each has one owner.
+          <b>Dex.</b> Predict what a neuron does, scan it to find out, then catch the best ones. Each has one owner.
         </p>
         <p>
           <b>Bounties.</b> Pick neurons that push the model toward a target, like talking about the sea. Beat the house's score.
+        </p>
+        <p>
+          <b>Map, lab and notes.</b> See neurons laid out by what they do, test whether two pushes add up, and collect field
+          notes on how the model works as you play.
         </p>
       </div>
 

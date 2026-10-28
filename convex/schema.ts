@@ -115,7 +115,7 @@ export default defineSchema({
 
   // Work for the GPU worker. key dedupes (one pending profile per neuron).
   jobs: defineTable({
-    kind: v.union(v.literal("profile"), v.literal("judge"), v.literal("daily"), v.literal("par")),
+    kind: v.union(v.literal("profile"), v.literal("judge"), v.literal("daily"), v.literal("par"), v.literal("combo")),
     key: v.string(),
     args: v.any(),
     priority: v.number(), // 0 = a player is waiting
@@ -169,6 +169,22 @@ export default defineSchema({
   })
     .index("by_player_date", ["playerId", "date"])
     .index("by_date", ["date"]),
+
+  // The lab: two neurons pushed separately and together, to see whether their effects add up (worker/main.py combo).
+  // additivity: cosine between the joint effect and the sum of the separate ones; gain: the joint effect's size over the
+  // sum's; towardA/B: cosine of the joint effect with each one alone. texts: the joint push's replies.
+  experiments: defineTable({
+    playerId: v.id("players"),
+    a: push,
+    b: push,
+    date: v.string(),
+    status: v.union(v.literal("pending"), v.literal("done"), v.literal("failed")),
+    texts: v.optional(v.array(v.string())),
+    additivity: v.optional(v.number()),
+    gain: v.optional(v.number()),
+    towardA: v.optional(v.number()),
+    towardB: v.optional(v.number()),
+  }).index("by_player_date", ["playerId", "date"]),
 
   bounties: defineTable({
     slug: v.string(),

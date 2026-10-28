@@ -20,12 +20,18 @@ neuron index come from there.
 
 ## Modes
 
-- **Dex.** Search every neuron's lenses for free. Spend a scan to see what a push actually does and how rare the neuron
-  is. You get 12 scans and 3 catches a day, and each neuron has one owner.
+- **Dex.** Search every neuron's lenses for free. Predict what a push will do, then spend a scan to see what it actually
+  does and how rare the neuron is. You get 12 scans and 3 catches a day, and each neuron has one owner.
 - **Daily.** One hidden neuron was pushed while the model answered three prompts. Find it in 15 guesses. Each guess
-  tells you how close its effect is to the hidden one's.
+  tells you how close its effect is to the hidden one's (cosine between behavior embeddings). Puzzles get harder through
+  the week, and every past one can be replayed for practice.
 - **Bounties.** Steer the model toward a target like the sea or French. The GPU judges each entry on how far it moves
   toward the target and whether the text stays readable. The house's best single neuron sets par.
+
+- **Map.** The 79,506 neurons strong enough to place, laid out by what pushing them does (`worker/places.py`). It fills
+  in as you and other players find neurons.
+- **Lab.** Push two neurons together and measure whether their effects add up.
+- **Field notes.** Short lessons on lenses, superposition, steering and the map, unlocked when play first shows them.
 
 Rarity measures how hard a neuron moves the model against random pushes of the same size. A push that turns the reply
 into loops or gibberish is a glitch, which is worth a few points too.
@@ -59,6 +65,13 @@ uv run python main.py --sweep
 
 `--sweep` measures every neuron whenever no player is waiting on the GPU. The first start also measures random-push
 baselines for each layer and caches them. Hourly crons create dailies and bounties, and dailies need the worker up.
+
+Once the sweep is done, lay out the map and load it:
+
+```sh
+uv run --group analysis python places.py     # writes ../data/places.jsonl and ../src/data/zones.json
+bunx convex import --table places --replace ../data/places.jsonl
+```
 
 To leave it all running, use `./up.sh`. It starts Convex, Vite, the worker and the README updater as systemd user
 services that restart on a crash and log to `logs/`. `./up.sh stop` stops them. `nohup` and `setsid` stay in the

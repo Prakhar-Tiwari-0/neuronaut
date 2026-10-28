@@ -54,6 +54,7 @@ export const fail = mutation({
     if (!job) return;
     await ctx.db.patch(id, { status: "failed", error: error.slice(0, 2000) });
     if (job.kind === "judge") await ctx.db.patch(job.args.entryId as Id<"entries">, { status: "failed" });
+    if (job.kind === "combo") await ctx.db.patch(job.args.experimentId as Id<"experiments">, { status: "failed" });
     if (job.kind === "profile") await refundPending(ctx, neuronKey(job.args.layer as number, job.args.n as number));
   },
 });
@@ -74,6 +75,25 @@ export const putProfiles = mutation({
     if (added) await bumpStats(ctx, { profiled: added });
     for (const id of jobIds) await ctx.db.patch(id, { status: "done" });
     return added;
+  },
+});
+
+// A lab experiment's result (lab.ts run).
+export const finishCombo = mutation({
+  args: {
+    secret: v.string(),
+    id: v.id("jobs"),
+    experimentId: v.id("experiments"),
+    texts: v.array(v.string()),
+    additivity: v.number(),
+    gain: v.number(),
+    towardA: v.number(),
+    towardB: v.number(),
+  },
+  handler: async (ctx, { secret, id, experimentId, ...result }) => {
+    checkWorker(secret);
+    await ctx.db.patch(experimentId, { status: "done", ...result });
+    await ctx.db.patch(id, { status: "done" });
   },
 });
 

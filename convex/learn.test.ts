@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { dailyPoints } from "./daily";
-import { PREDICT_POINTS, neuronKey } from "./rules";
+import { LIMITS, PREDICT_POINTS, neuronKey } from "./rules";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -118,4 +118,36 @@ test("a practice puzzle scores like the real one but pays nothing and leaves the
   await expect(alice.mutation(api.daily.guess, { layer: 1, n: 1, date: "2026-10-29" })).rejects.toThrow("not out yet");
   // practice results don't count toward a past day's players and solvers
   expect(await t.query(api.daily.current, { date: "2026-10-27" })).toMatchObject({ players: 0, solvers: 0 });
+});
+
+test("a lab experiment queues one GPU job for its player, and only the worker can finish it", async () => {
+  const { t, player } = await setup();
+  const alice = await player("alice");
+  const bob = await player("bob");
+  const a = { layer: 20, n: 1, dose: 0.6 };
+  const b = { layer: 21, n: 2, dose: 0.6 };
+  await alice.mutation(api.lab.run, { a, b });
+  const job = (await t.run((ctx) => ctx.db.query("jobs").collect())).find((j) => j.kind === "combo")!;
+  expect(job.by).toBeDefined();
+  const result = { texts: ["both"], additivity: 0.93, gain: 0.8, towardA: 0.7, towardB: 0.6 };
+  await expect(bob.mutation(api.worker.finishCombo, { secret: "wrong", id: job._id, experimentId: job.args.experimentId, ...result })).rejects.toThrow("bad worker secret");
+  await t.mutation(api.worker.finishCombo, { secret: SECRET, id: job._id, experimentId: job.args.experimentId, ...result });
+  expect(await alice.query(api.lab.mine, {})).toMatchObject([{ a, b, status: "done", additivity: 0.93 }]);
+  expect(await bob.query(api.lab.mine, {})).toEqual([]);
+});
+
+test("the lab refuses one neuron twice, a non-finite or out-of-range dose, and more than its daily limit", async () => {
+  const { t, player } = await setup();
+  const alice = await player("alice");
+  const p = (n: number, dose = 0.5) => ({ layer: 10, n, dose });
+  await expect(alice.mutation(api.lab.run, { a: p(1), b: p(1) })).rejects.toThrow("two different neurons");
+  await expect(alice.mutation(api.lab.run, { a: p(1, NaN), b: p(2) })).rejects.toThrow("Doses are");
+  await expect(alice.mutation(api.lab.run, { a: p(1, 3), b: p(2) })).rejects.toThrow("Doses are");
+  for (let i = 0; i < LIMITS.experiments; i++) {
+    await alice.mutation(api.lab.run, { a: p(100 + i), b: p(200 + i) });
+    // the worker finishes each one, so the per-player GPU cap isn't what refuses the last
+    for (const j of await t.run((ctx) => ctx.db.query("jobs").filter((q) => q.eq(q.field("status"), "pending")).collect()))
+      await t.mutation(api.worker.finishCombo, { secret: SECRET, id: j._id, experimentId: j.args.experimentId, texts: [], additivity: 1, gain: 1, towardA: 1, towardB: 1 });
+  }
+  await expect(alice.mutation(api.lab.run, { a: p(1), b: p(2) })).rejects.toThrow("experiments a day");
 });
