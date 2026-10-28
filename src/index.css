@@ -218,6 +218,17 @@ html.dark {
   }
 }
 
+/* a new field note slides up from the bottom edge; it leaves without animating */
+.note-in {
+  transition:
+    opacity 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
 /* the share grid on the result card fills in one square at a time */
 .stagger > * {
   animation: pop 300ms var(--ease-out) both;
@@ -234,7 +245,8 @@ html.dark {
   .stagger > * {
     animation: fade 200ms ease both;
   }
-  .modal-panel {
+  .modal-panel,
+  .note-in {
     @starting-style {
       transform: none;
     }

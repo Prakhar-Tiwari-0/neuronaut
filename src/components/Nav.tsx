@@ -7,7 +7,9 @@ import { HowToPlay } from "./HowToPlay";
 const LINKS = [
   ["/daily", "Daily"],
   ["/dex", "Dex"],
+  ["/map", "Map"],
   ["/bounties", "Bounties"],
+  ["/notes", "Notes"],
   ["/trainers", "Leaderboard"],
 ] as const;
 

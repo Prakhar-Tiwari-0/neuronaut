@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const push = v.object({ layer: v.number(), n: v.number(), dose: v.number() });
 export const ladder = v.object({ ranks: v.array(v.number()), cos: v.array(v.float64()) }); // see rules.ts ladderRank
+export const effect = v.union(v.literal("quiet"), v.literal("shift"), v.literal("word"), v.literal("breaks")); // rules.ts EFFECTS
 
 export default defineSchema({
   // One row, "global": totals and the dex coverage grid (layers x COVERAGE_BINS catch counts).
@@ -43,8 +44,25 @@ export default defineSchema({
     caught: v.boolean(),
   })
     .index("by_key", ["key"])
-    .index("by_ln", ["layer", "n"])
     .vectorIndex("by_embedding", { vectorField: "embedding", dimensions: 256, filterFields: ["caught"] }),
+
+  // The behavior map (worker/places.py), imported, not written by functions. One row per neuron strong enough to place:
+  // x, y in [0, 1], the map square `cell` and its zone. Strong-but-broken pushes below the placing threshold get a row
+  // with only `effect`. No row means quiet: pushed alone, it barely changes anything. Disclosed like a profile.
+  places: defineTable({
+    layer: v.number(),
+    n: v.number(),
+    effect: v.union(v.literal("shift"), v.literal("word"), v.literal("breaks")),
+    zone: v.optional(v.string()),
+    x: v.optional(v.number()),
+    y: v.optional(v.number()),
+    cell: v.optional(v.number()), // row * grid + column, the square of src/data/zones.json it falls in
+    r: v.optional(v.number()), // uniform in [0, 1), to pick a random neuron in a square
+    focus: v.optional(v.number()), // in how many of the 4 profile replies its most consistent word shows up
+    focusWord: v.optional(v.string()),
+  })
+    .index("by_ln", ["layer", "n"])
+    .index("by_cell_r", ["cell", "r"]),
 
   players: defineTable({
     handle: v.string(),
@@ -57,6 +75,8 @@ export default defineSchema({
     bestStreak: v.number(),
     lastSolved: v.optional(v.string()),
     bountyWins: v.number(),
+    predicted: v.optional(v.number()), // scans with a prediction, and how many were right
+    predictedRight: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_handle", ["handleLower"])
@@ -70,11 +90,12 @@ export default defineSchema({
     n: v.number(),
     date: v.string(),
     source: v.union(v.literal("scan"), v.literal("guess")),
+    prediction: v.optional(effect), // what the player said pushing it would do, before seeing it
+    right: v.optional(v.boolean()),
   })
     .index("by_player", ["playerId"])
     .index("by_player_date", ["playerId", "date"])
-    .index("by_player_key", ["playerId", "key"])
-    .index("by_player_ln", ["playerId", "layer", "n"]),
+    .index("by_player_key", ["playerId", "key"]),
 
   catches: defineTable({
     playerId: v.id("players"),
@@ -88,7 +109,6 @@ export default defineSchema({
     date: v.string(),
   })
     .index("by_key", ["key"])
-    .index("by_ln", ["layer", "n"])
     .index("by_rarity", ["rarity"])
     .index("by_player", ["playerId"])
     .index("by_player_date", ["playerId", "date"]),
@@ -120,6 +140,7 @@ export default defineSchema({
     ladder, // how close every measured neuron is to the answer, sampled by rank: guess ranks and heat come from it
     band: v.array(v.number()), // [lo, hi] layers, a hint
     hint: v.string(), // the answer's top steer token, a hint
+    difficulty: v.optional(v.union(v.literal("easy"), v.literal("medium"), v.literal("hard"))), // by weekday, worker/main.py
   }).index("by_date", ["date"]),
 
   guesses: defineTable({
@@ -132,6 +153,8 @@ export default defineSchema({
     heat: v.optional(v.number()),
     rank: v.optional(v.union(v.number(), v.null())),
     correct: v.optional(v.boolean()),
+    cos: v.optional(v.number()), // behavior-embedding cosine to the answer; rank and heat come from it
+    practice: v.optional(v.boolean()), // a past puzzle replayed: scored the same, pays nothing
   })
     .index("by_player_date", ["playerId", "date"])
     .index("by_key_status", ["key", "status"]),
@@ -142,6 +165,7 @@ export default defineSchema({
     solved: v.boolean(),
     guesses: v.number(),
     heats: v.array(v.number()),
+    practice: v.optional(v.boolean()),
   })
     .index("by_player_date", ["playerId", "date"])
     .index("by_date", ["date"]),

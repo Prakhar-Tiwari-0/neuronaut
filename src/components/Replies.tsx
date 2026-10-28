@@ -1,5 +1,18 @@
-// Steered replies next to the unsteered model's replies to the same prompts, one card per prompt.
-export function Replies({ prompts, steered, baseline, steeredLabel = "With this neuron pushed" }: { prompts: string[]; steered: string[]; baseline?: string[]; steeredLabel?: string }) {
+// Steered replies next to another set of replies to the same prompts (the unsteered model's, by default), one card per
+// prompt.
+export function Replies({
+  prompts,
+  steered,
+  baseline,
+  steeredLabel = "With this neuron pushed",
+  baselineLabel = "Normal",
+}: {
+  prompts: string[];
+  steered: string[];
+  baseline?: string[];
+  steeredLabel?: string;
+  baselineLabel?: string;
+}) {
   return (
     <div className="space-y-4">
       {prompts.map((p, i) => (
@@ -12,7 +25,7 @@ export function Replies({ prompts, steered, baseline, steeredLabel = "With this 
             </div>
             {baseline && (
               <div>
-                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-faint">Normal</div>
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-faint">{baselineLabel}</div>
                 <div className="screen text-dim">{baseline[i]}</div>
               </div>
             )}

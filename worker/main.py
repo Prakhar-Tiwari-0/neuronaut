@@ -8,7 +8,9 @@ checks for new jobs. The sweep's results stay in a local store (store.py), not i
 the sweep already measured is answered from it with no GPU work, and daily ranks are computed against all of it.
 """
 import argparse
+import datetime
 import os
+import re
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # less fragmentation, so batches keep fitting
 import random
@@ -39,6 +41,10 @@ DISPLAY_PROMPTS = [  # daily puzzle prompts: never the profile prompts, so a car
     "Describe a sound you like.",
 ]
 PAR_DOSES = [0.4, 0.7, 1.0]
+# Dailies get harder through the week, like a newspaper crossword. Easy: late layers, and the neuron's own steer-lens
+# words show up in its replies (so lens search finds it). Hard: early or middle layers, and they don't.
+DIFFICULTY = ["easy", "easy", "medium", "medium", "hard", "hard", "hard"]  # Monday first
+BANDS = {"easy": [(19, 25), (26, 30)], "medium": [(11, 18), (19, 25)], "hard": [(3, 10), (11, 18)]}
 LADDER_EVERY = 600  # sweep batches (~1.5 h) between refreshes of upcoming dailies' ladders
 STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache", f"sweep-{MODEL.replace('/', '--')}")
 
@@ -121,9 +127,9 @@ class Worker:
         a = job["args"]
         rng = random.Random(a["date"])
         exclude = set(a.get("exclude", []))
-        L, N = self.lens.kl.shape
-        # spread answers over depth: each date draws a band, then the strongest 10% (steer KL) within it
-        lo, hi = rng.choice([(3, 10), (11, 18), (19, 25), (26, L - 2)])
+        level = DIFFICULTY[datetime.date.fromisoformat(a["date"]).weekday()]
+        # each date draws a depth band for its difficulty, then the strongest 10% (steer KL) within it
+        lo, hi = rng.choice(BANDS[level])
         band = self.lens.kl[lo:hi + 1]
         strong = [tuple(map(int, x)) for x in np.argwhere(band >= np.quantile(band, 0.9)) + [lo, 0]]
         strong = [(l, n) for l, n in strong if f"{l}:{n}" not in exclude]
@@ -135,14 +141,14 @@ class Worker:
                 fresh = self.eng.profile(pick)
                 self.store.put(fresh)
                 measured += fresh
-            good = [p for p in measured if self.suits(p)]
+            good = [p for p in measured if self.suits(p) and (level == "medium" or self.own_words(p) == (level == "easy"))]
             rng.shuffle(good)
             for p in good:
                 measured.remove(p)  # tried once, whatever happens
                 if not self.findable(p):
                     continue
                 ranks, cos = self.store.ladder(p["embedding"], exclude=(p["layer"], p["n"]))
-                if (cos[0] if cos else 0) < 0.9 and self.publish(job, a["date"], p, rng):
+                if (cos[0] if cos else 0) < 0.9 and self.publish(job, a["date"], p, rng, level):
                     return
             print(f"daily {a['date']}: attempt {attempt} found no puzzle among {len(good)} candidates", flush=True)
         raise RuntimeError("no suitable neuron found")
@@ -152,10 +158,16 @@ class Worker:
         to be published: it scans every neuron's steer lens."""
         return p["z"] >= RARE_Z and p["nll"] <= GLITCH_NLL and p["distinct"] >= GLITCH_DISTINCT and len(p["words"]) >= 3
 
+    def own_words(self, p):
+        """Whether the neuron's top steer-lens words show up in at least 2 of its replies (worker/places.py "word")."""
+        toks = [t for t in (norm(x) for x in self.lens.tokens(p["layer"], p["n"], 3)) if t]
+        texts = [t.lower() for t in p["texts"]]
+        return any(sum(1 for t in texts if re.search(r"\b" + re.escape(w) + r"\b", t)) >= 2 for w in toks)
+
     def findable(self, p):
         return any(self.lens.findable(p["layer"], p["n"], w) for w in p["words"][:6])
 
-    def publish(self, job, date, p, rng):
+    def publish(self, job, date, p, rng, difficulty):
         """Writes the puzzle if the neuron's replies to the display prompts stay readable (no loops, no silence);
         returns whether it did."""
         l, n = p["layer"], p["n"]
@@ -172,8 +184,8 @@ class Worker:
         ranks, cos = self.store.ladder(p["embedding"], exclude=(l, n))
         self.call("mutation", "worker:putDaily", id=job["id"], date=date, layer=l, n=n, prompts=prompts, texts=texts,
                   baseline=baseline, embedding=p["embedding"], band=[lo, lo + 7], hint=hint,
-                  ladder={"ranks": ranks, "cos": cos})
-        print(f"daily {date}: L{l} N{n} {p['words'][:5]} z={p['z']:.1f}", flush=True)
+                  ladder={"ranks": ranks, "cos": cos}, difficulty=difficulty)
+        print(f"daily {date} ({difficulty}): L{l} N{n} {p['words'][:5]} z={p['z']:.1f}", flush=True)
         return True
 
     def refresh_ladders(self):

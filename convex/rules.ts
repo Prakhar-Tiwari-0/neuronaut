@@ -9,6 +9,13 @@ export const HINTS = { band: 5, token: 10 }; // daily hints unlock after this ma
 export const SOLVE_COS = 0.97; // a guess this similar to the answer counts as solving it
 export const LAUNCH = "2026-10-27";
 
+// What pushing a neuron does, from worker/places.py. Players predict it before a scan. "quiet": barely changes the
+// output; "shift": changes tone or topic without its steer-lens tokens showing up; "word": its top steer-lens tokens
+// show up in the replies; "breaks": the text falls apart.
+export const EFFECTS = ["quiet", "shift", "word", "breaks"] as const;
+export type Effect = (typeof EFFECTS)[number];
+export const PREDICT_POINTS = 2;
+
 export const RARITIES = ["legendary", "epic", "rare", "uncommon", "common", "glitch"] as const;
 export type Rarity = (typeof RARITIES)[number];
 export const POINTS: Record<Rarity, number> = { legendary: 100, epic: 30, rare: 10, uncommon: 3, common: 1, glitch: 5 };

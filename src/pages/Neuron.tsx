@@ -2,10 +2,13 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { MODEL, POINTS } from "../../convex/rules";
+import { EFFECTS, type Effect, MODEL, POINTS, PREDICT_POINTS } from "../../convex/rules";
+import { BehaviorMap, ZONES, zoneTint } from "../components/BehaviorMap";
 import { Replies } from "../components/Replies";
 import { Button, ErrorLine, Input, Label, RarityTag, Stat, Tokens } from "../components/ui";
+import { EFFECT_TEXT } from "../lib/effects";
 import { dexNo } from "../lib/format";
+import { useUnlock } from "../lib/notes";
 import { errorText, useSession } from "../lib/session";
 
 export function Neuron() {
@@ -23,15 +26,22 @@ export function Neuron() {
   const [caught, setCaught] = useState<{ points: number; uniqueness: number } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const effect = card?.effect ?? null;
+  useUnlock("lenses", effect === "word");
+  useUnlock("early", effect === "shift" && layer < 8);
+  useUnlock("breaks", effect === "breaks");
+  useUnlock("quiet", effect === "quiet");
+  useUnlock("focus", effect !== "breaks" && card?.focus?.n === 4);
+
   if (!valid) return <div className="py-20 text-center text-dim">No such neuron.</div>;
   if (card === undefined) return <div className="py-20 text-center text-faint">loading</div>;
 
-  const doScan = async () => {
+  const doScan = async (prediction: Effect) => {
     setError(null);
     const ok = await requireJoin();
     if (!ok) return;
     try {
-      await scan({ layer, n });
+      await scan({ layer, n, prediction });
     } catch (e) {
       setError(errorText(e));
     }
@@ -94,18 +104,31 @@ export function Neuron() {
       </div>
 
       {card.status === "hidden" && (
-        <div className="rounded-2xl border-2 border-dashed border-line-strong p-6 text-center">
-          <p className="text-lg">What does this neuron do? Scan it to find out.</p>
-          <p className="mt-1 text-dim">A scan runs the model with this neuron pushed and shows its answers and rarity.</p>
-          <div className="mt-4 flex flex-col items-center gap-2">
-            <Button size="lg" onClick={doScan} disabled={!!me && me.scansLeft <= 0}>
-              Scan
-            </Button>
-            {me && <span className="text-sm text-dim">{me.scansLeft} scans left today</span>}
+        <div className="rounded-2xl border-2 border-dashed border-line-strong p-6">
+          <p className="text-xl font-semibold">Predict, then scan</p>
+          <p className="mt-1 text-dim">
+            Pushing this neuron will change how the model answers. From its layer ({layer} of {MODEL.layers - 1}) and its two
+            lenses above, what do you expect? Your pick spends a scan, and a right call is worth {PREDICT_POINTS} pts.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {EFFECTS.map((e) => (
+              <button
+                key={e}
+                onClick={() => doScan(e)}
+                disabled={!!me && me.scansLeft <= 0}
+                className="press rounded-xl border-2 border-line-strong bg-card p-4 text-left hover:border-fg disabled:pointer-events-none disabled:opacity-40"
+              >
+                <div className="font-semibold">{EFFECT_TEXT[e].name}</div>
+                <div className="text-sm text-dim">{EFFECT_TEXT[e].looks}</div>
+              </button>
+            ))}
           </div>
+          {me && <div className="mt-3 text-sm text-dim">{me.scansLeft} scans left today</div>}
           <div className="mt-2"><ErrorLine error={error} /></div>
         </div>
       )}
+
+      {effect && <Effects card={card} />}
 
       {card.status === "pending" && (
         <div className="rounded-2xl border border-line bg-card p-6 text-center text-lg text-dim">Measuring on the GPU. Usually a few seconds.</div>
@@ -161,6 +184,65 @@ export function Neuron() {
             <Replies prompts={overview?.prompts ?? []} steered={p.texts} baseline={overview?.baseline} />
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+type Card = NonNullable<(typeof api.neurons.card)["_returnType"]>;
+
+// What pushing it does, how focused that is and where it sits on the map, with the player's prediction if they made one.
+function Effects({ card }: { card: Card }) {
+  const effect = card.effect!;
+  const zone = card.place ? ZONES.find((z) => z.id === card.place!.zone) : null;
+  return (
+    <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+      <div className="space-y-4 rounded-2xl border border-line bg-card p-6">
+        {card.prediction && (
+          <div className={`pop rounded-xl px-4 py-3 font-medium ${card.prediction.right ? "bg-good/15 text-fg" : "bg-raised"}`}>
+            {card.prediction.right
+              ? `You called it: ${EFFECT_TEXT[card.prediction.said].name.toLowerCase()}. +${PREDICT_POINTS} pts`
+              : `You said ${EFFECT_TEXT[card.prediction.said].name.toLowerCase()}.`}
+          </div>
+        )}
+        <div>
+          <Label>What pushing it does</Label>
+          <div className="mt-1 text-2xl font-semibold">{EFFECT_TEXT[effect].name}</div>
+          <div className="text-dim">{EFFECT_TEXT[effect].looks}</div>
+        </div>
+        {card.focus && effect !== "breaks" && (
+          <div>
+            <Label>Focus</Label>
+            <div className="mt-1">
+              {card.focus.word ? (
+                <>
+                  <span className="font-mono font-semibold">{card.focus.word}</span> comes up in{" "}
+                  <span className="font-semibold">
+                    {card.focus.n} of {card.focus.of}
+                  </span>{" "}
+                  replies. {card.focus.n === 4 ? "Same theme whatever the question." : card.focus.n <= 1 ? "What it brings up depends on the question." : ""}
+                </>
+              ) : (
+                "No word repeats across its replies: what it brings up depends on the question."
+              )}
+            </div>
+          </div>
+        )}
+        {zone && (
+          <div>
+            <Label>Zone</Label>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="h-3 w-3 rounded-sm" style={{ background: zoneTint(zone.id) }} />
+              <span className="font-semibold">{zone.name}</span>
+            </div>
+            <div className="text-dim">{zone.blurb}</div>
+          </div>
+        )}
+      </div>
+      {card.place && (
+        <Link to="/map" className="block rounded-2xl border border-line bg-card p-3 hover:border-line-strong" aria-label="Open the map">
+          <BehaviorMap labels={false} dots={[{ layer: card.layer, n: card.n, x: card.place.x, y: card.place.y, color: "--fg", size: 5 }]} />
+        </Link>
       )}
     </div>
   );

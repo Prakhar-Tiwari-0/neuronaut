@@ -1,38 +1,31 @@
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { usePaginatedQuery, useQuery } from "convex/react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { LIMITS, MODEL, RARITIES, type Rarity } from "../../convex/rules";
-import { Coverage } from "../components/Coverage";
+import { CaughtMap } from "../components/CaughtMap";
 import { LensSearch } from "../components/LensSearch";
 import { Button, ErrorLine, Label, NeuronInput, NeuronLink, RarityTag, Steps, Tokens } from "../components/ui";
 import { ago, RARITY_COLOR } from "../lib/format";
-import { errorText, useSession } from "../lib/session";
-
-const BINS = 96;
+import { useSession } from "../lib/session";
 
 export function Dex() {
-  const { me, requireJoin } = useSession();
+  const { me } = useSession();
   const nav = useNavigate();
   const overview = useQuery(api.neurons.overview);
-  const scan = useMutation(api.neurons.scan);
   const [tab, setTab] = useState<"caught" | "seen">("caught");
   const [rarity, setRarity] = useState<Rarity | undefined>(undefined);
   const [layer, setLayer] = useState("");
   const [n, setN] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const doScan = async (random: boolean) => {
+  // Opens the neuron's page, where the player predicts what it does and scans it.
+  const open = (random: boolean) => {
     setError(null);
-    const ok = await requireJoin();
-    if (!ok) return;
-    if (!random && (layer === "" || n === "")) return setError("Enter a layer and a neuron, or scan a random one");
-    try {
-      const r = await scan(random ? {} : { layer: Number(layer), n: Number(n) });
-      nav(`/n/${r.layer}/${r.n}`);
-    } catch (e) {
-      setError(errorText(e));
-    }
+    if (random) return nav(`/n/${Math.floor(Math.random() * MODEL.layers)}/${Math.floor(Math.random() * MODEL.width)}`);
+    if (layer === "" || n === "") return setError("Enter a layer and a neuron, or pick a random one");
+    if (Number(layer) >= MODEL.layers || Number(n) >= MODEL.width) return setError(`Layers go to ${MODEL.layers - 1}, neurons to ${MODEL.width - 1}`);
+    nav(`/n/${Number(layer)}/${Number(n)}`);
   };
 
   return (
@@ -46,8 +39,8 @@ export function Dex() {
         </div>
         <Steps
           steps={[
-            <>Find a neuron: search a word below, or scan a random one.</>,
-            <>Scan it ({LIMITS.scans} a day) to see what it does and how rare it is.</>,
+            <>Find a neuron: search a word, pick a spot on the map, or try a random one.</>,
+            <>Predict what pushing it does, then scan it ({LIMITS.scans} a day) to see if you were right.</>,
             <>Catch it to make it yours ({LIMITS.catches} a day). Rarer and more unique scores more.</>,
           ]}
         />
@@ -58,22 +51,24 @@ export function Dex() {
           className="rounded-2xl border border-line bg-card p-5"
           onSubmit={(e) => {
             e.preventDefault();
-            doScan(false);
+            open(false);
           }}
         >
           <div className="flex items-baseline justify-between">
-            <Label>Scan a neuron</Label>
+            <Label>Open a neuron</Label>
             <span className="text-sm text-dim">{me ? `${me.scansLeft} scans, ${me.catchesLeft} catches left today` : "\u00a0"}</span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <NeuronInput layer={layer} n={n} onLayer={setLayer} onN={setN} />
-            <Button>Scan</Button>
+            <Button>Open</Button>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <Button type="button" variant="ghost" size="lg" className="flex-1" onClick={() => doScan(true)}>
+            <Button type="button" variant="ghost" size="lg" className="flex-1" onClick={() => open(true)}>
               Random
             </Button>
-            <span className="text-sm text-dim">Don't know where to start? Try your luck.</span>
+            <span className="text-sm text-dim">
+              {me && me.predicted > 0 ? `Your predictions: ${me.predictedRight} of ${me.predicted} right` : "Don't know where to start? Try your luck."}
+            </span>
           </div>
           <div className="mt-2 min-h-5">
             <ErrorLine error={error} />
@@ -86,10 +81,7 @@ export function Dex() {
       </section>
 
       <section>
-        <Label className="mb-3">The board: neurons caught so far, by layer</Label>
-        <div className="overflow-x-auto rounded-2xl border border-line bg-card p-4">
-          <Coverage coverage={overview?.coverage ?? []} layers={MODEL.layers} bins={BINS} />
-        </div>
+        <CaughtMap />
       </section>
 
       <section>

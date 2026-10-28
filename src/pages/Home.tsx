@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { LIMITS, MODEL } from "../../convex/rules";
-import { Coverage } from "../components/Coverage";
+import { CaughtMap } from "../components/CaughtMap";
 import { Label, NeuronLink, RarityTag } from "../components/ui";
 import { ago, until } from "../lib/format";
 
@@ -72,7 +72,7 @@ export function Home() {
           to="/dex"
           title="Dex"
           tagline="Collect the rarest neurons."
-          steps={[`Scan a neuron (${LIMITS.scans} a day)`, "See what it does and how rare it is", `Catch and name it (${LIMITS.catches} a day)`]}
+          steps={["Pick a neuron: a word, a map spot, or random", `Predict what it does, then scan (${LIMITS.scans} a day)`, `Catch and name it (${LIMITS.catches} a day)`]}
           status={`${overview?.caught ?? 0} caught`}
         />
         <ModeCard
@@ -85,12 +85,7 @@ export function Home() {
       </section>
 
       <section className="grid gap-8 lg:grid-cols-[1fr_380px]">
-        <div>
-          <Label className="mb-3">The board: neurons caught so far, by layer</Label>
-          <div className="overflow-x-auto rounded-2xl border border-line bg-card p-4">
-            <Coverage coverage={overview?.coverage ?? []} layers={MODEL.layers} bins={96} />
-          </div>
-        </div>
+        <CaughtMap />
         <div>
           <Label className="mb-3">Latest catches</Label>
           {overview?.recent.length ? (

@@ -1,6 +1,6 @@
 # Only the web app deploys to Vercel; the worker, its data and local state stay on the GPU box.
 worker
-data
+/data
 logs
 e2e
 scratch

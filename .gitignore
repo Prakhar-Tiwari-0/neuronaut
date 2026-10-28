@@ -4,7 +4,7 @@ dist
 .env*.local
 .tmp
 logs
-data
+/data
 worker/.venv
 worker/cache
 __pycache__/

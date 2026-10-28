@@ -42,6 +42,11 @@ export function heatBg(heat: number | null, correct = false) {
   return "bg-cold";
 }
 
+// The same color as a theme variable, for canvases (the behavior map's dots).
+export function heatVar(heat: number | null, correct = false) {
+  return "--" + heatBg(heat, correct).slice(3);
+}
+
 // The share grid's emoji for one guess, matching heatBg.
 export function heatEmoji(heat: number, correct: boolean) {
   return correct ? "🟩" : heat >= 70 ? "🟥" : heat >= 45 ? "🟧" : heat >= 20 ? "🟨" : "⬛";

@@ -97,7 +97,7 @@ describe("GPU budget", () => {
       for (let i = 0; i < GPU.queue; i++) await ctx.db.insert("jobs", { kind: "profile", key: `profile:x${i}`, args: {}, priority: 0, status: "pending" });
     });
     const bob = await player("bob");
-    await expect(bob.mutation(api.neurons.scan, { layer: 3, n: 3 })).resolves.toEqual({ layer: 3, n: 3 });
+    await expect(bob.mutation(api.neurons.scan, { layer: 3, n: 3 })).resolves.toMatchObject({ layer: 3, n: 3 });
   });
 });
 
@@ -136,7 +136,7 @@ describe("daily settlement", () => {
     expect((await alice.query(api.daily.current, {}))!.result).toBeNull(); // not settled with a pending guess before it
     await putProfiles([profile(1, 1, axis(1))]);
     const { result } = (await alice.query(api.daily.current, {}))!;
-    expect(result).toEqual({ solved: true, guesses: 2, heats: [expect.any(Number), 100] });
+    expect(result).toMatchObject({ solved: true, guesses: 2, heats: [expect.any(Number), 100] });
     expect((await alice.query(api.players.me, {}))!.points).toBe(dailyPoints(2));
   });
 
@@ -150,7 +150,7 @@ describe("daily settlement", () => {
     const job = await t.run((ctx) => ctx.db.query("jobs").withIndex("by_key", (q) => q.eq("key", "profile:1:1")).unique());
     await t.mutation(api.worker.fail, { secret: SECRET, id: job!._id, error: "boom" });
     const d = (await alice.query(api.daily.current, {}))!;
-    expect(d.result).toEqual({ solved: true, guesses: 1, heats: [100] });
+    expect(d.result).toMatchObject({ solved: true, guesses: 1, heats: [100] });
   });
 
   test("tomorrow's puzzle isn't readable today", async () => {

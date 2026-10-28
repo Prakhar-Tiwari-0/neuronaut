@@ -49,6 +49,9 @@ export const me = query({
       points: p.points,
       caught: p.caught,
       streak: p.streak,
+      dailySolved: p.dailySolved,
+      predicted: p.predicted ?? 0,
+      predictedRight: p.predictedRight ?? 0,
       scansLeft: LIMITS.scans - scans.filter((s) => s.source === "scan").length,
       catchesLeft: LIMITS.catches - catches.length,
     };
@@ -84,6 +87,8 @@ export const profile = query({
       streak: p.streak,
       bestStreak: p.bestStreak,
       bountyWins: p.bountyWins,
+      predicted: p.predicted ?? 0,
+      predictedRight: p.predictedRight ?? 0,
       catches: catches.map((c) => ({ layer: c.layer, n: c.n, name: c.name, rarity: c.rarity as Rarity, points: c.points, date: c.date })),
     };
   },

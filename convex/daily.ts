@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { enqueue } from "./jobs";
+import { placeOf } from "./map";
 import {
   HINTS,
   LIMITS,
@@ -45,11 +46,17 @@ export const current = query({
     const result = player
       ? await ctx.db.query("results").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", d)).unique()
       : null;
-    const all = await ctx.db.query("results").withIndex("by_date", (q) => q.eq("date", d)).collect();
+    const all = (await ctx.db.query("results").withIndex("by_date", (q) => q.eq("date", d)).collect()).filter((r) => !r.practice);
     const finished = !!result;
+    const at = async (layer: number, n: number) => {
+      const p = await placeOf(ctx, layer, n);
+      return p?.x !== undefined && p.y !== undefined ? { x: p.x, y: p.y } : null;
+    };
     return {
       date: d,
       number: dailyNumber(d),
+      practice: d < now, // a past puzzle: playable, but it pays nothing
+      difficulty: daily.difficulty ?? null,
       prompts: daily.prompts,
       texts: daily.texts,
       baseline: daily.baseline,
@@ -57,14 +64,50 @@ export const current = query({
       hintsAt: HINTS,
       band: guesses.length >= HINTS.band || finished ? daily.band : null,
       hint: guesses.length >= HINTS.token || finished ? daily.hint : null,
-      guesses: guesses
-        .map((g) => ({ layer: g.layer, n: g.n, status: g.status, heat: g.heat ?? null, rank: g.rank ?? null, correct: g.correct ?? false, at: g._creationTime }))
-        .sort((a, b) => (b.heat ?? -999) - (a.heat ?? -999)),
-      result: result ? { solved: result.solved, guesses: result.guesses, heats: result.heats } : null,
-      answer: finished ? { layer: daily.layer, n: daily.n } : null,
+      guesses: (
+        await Promise.all(
+          guesses.map(async (g) => ({
+            layer: g.layer,
+            n: g.n,
+            status: g.status,
+            heat: g.heat ?? null,
+            rank: g.rank ?? null,
+            cos: g.cos ?? null,
+            correct: g.correct ?? false,
+            at: g._creationTime,
+            place: await at(g.layer, g.n), // guessed neurons are visited, so their place is disclosed
+          })),
+        )
+      ).sort((a, b) => (b.heat ?? -999) - (a.heat ?? -999)),
+      result: result ? { solved: result.solved, guesses: result.guesses, heats: result.heats, practice: !!result.practice } : null,
+      answer: finished ? { layer: daily.layer, n: daily.n, place: await at(daily.layer, daily.n) } : null,
       players: all.length,
       solvers: all.filter((r) => r.solved).length,
     };
+  },
+});
+
+// Past puzzles, newest first, for practice: how many played each live and solved it, and how this player did.
+export const archive = query({
+  args: {},
+  handler: async (ctx) => {
+    const player = await playerFor(ctx);
+    const past = await ctx.db.query("dailies").withIndex("by_date", (q) => q.lt("date", today())).order("desc").take(60);
+    return await Promise.all(
+      past.map(async (d) => {
+        const all = await ctx.db.query("results").withIndex("by_date", (q) => q.eq("date", d.date)).collect();
+        const live = all.filter((r) => !r.practice);
+        const mine = player ? all.find((r) => r.playerId === player._id) : undefined;
+        return {
+          date: d.date,
+          number: dailyNumber(d.date),
+          difficulty: d.difficulty ?? null,
+          players: live.length,
+          solvers: live.filter((r) => r.solved).length,
+          mine: mine ? { solved: mine.solved, guesses: mine.guesses, practice: !!mine.practice } : null,
+        };
+      }),
+    );
   },
 });
 
@@ -75,7 +118,7 @@ async function resolve(ctx: MutationCtx, g: Doc<"guesses">, embedding: number[],
   const correct = g.key === daily.key || cos >= SOLVE_COS;
   const rank = correct ? 0 : ladderRank(daily.ladder, cos);
   const total = daily.ladder.ranks[daily.ladder.ranks.length - 1] ?? 1;
-  await ctx.db.patch(g._id, { status: "done", heat: correct ? 100 : heat(rank, total), rank, correct });
+  await ctx.db.patch(g._id, { status: "done", heat: correct ? 100 : heat(rank, total), rank, correct, cos: Math.round(cos * 1000) / 1000 });
   await settle(ctx, g.playerId, daily);
 }
 
@@ -90,7 +133,10 @@ async function settle(ctx: MutationCtx, playerId: Doc<"players">["_id"], daily: 
   const used = hit >= 0 ? gs.slice(0, hit + 1) : gs;
   if ((hit < 0 && gs.length < LIMITS.guesses) || used.some((g) => g.status !== "done")) return;
   const solved = hit >= 0;
-  await ctx.db.insert("results", { playerId, date: daily.date, solved, guesses: used.length, heats: used.map((g) => g.heat ?? 0) });
+  const practice = gs.some((g) => g.practice);
+  await ctx.db.insert("results", { playerId, date: daily.date, solved, guesses: used.length, heats: used.map((g) => g.heat ?? 0), practice });
+  await reveal(ctx, playerId, daily);
+  if (practice) return;
   const p = (await ctx.db.get(playerId))!;
   // A guess pending across UTC midnight can settle an older puzzle after a newer one; only the newest date moves the
   // streak (a late older win still pays, it just doesn't extend the run).
@@ -107,22 +153,36 @@ async function settle(ctx: MutationCtx, playerId: Doc<"players">["_id"], daily: 
   }
 }
 
+// Once a player finishes, the answer becomes one of their visited neurons: its card (and its place on the map) opens up
+// so they can see why each guess scored what it did. Its profile is measured if nobody has yet, at background priority
+// so it doesn't spend the player's GPU budget.
+async function reveal(ctx: MutationCtx, playerId: Doc<"players">["_id"], daily: Doc<"dailies">) {
+  const seen = await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", playerId).eq("key", daily.key)).first();
+  if (!seen) await ctx.db.insert("scans", { playerId, key: daily.key, layer: daily.layer, n: daily.n, date: daily.date, source: "guess" });
+  if (!(await ctx.db.query("profiles").withIndex("by_key", (q) => q.eq("key", daily.key)).unique()))
+    await enqueue(ctx, "profile", `profile:${daily.key}`, { layer: daily.layer, n: daily.n }, 1);
+}
+
+// A guess at today's puzzle, or with `date` at a past one for practice: scored the same way, but it pays no points and
+// doesn't touch the streak.
 export const guess = mutation({
-  args: { layer: v.number(), n: v.number() },
-  handler: async (ctx, { layer, n }) => {
+  args: { layer: v.number(), n: v.number(), date: v.optional(v.string()) },
+  handler: async (ctx, { layer, n, ...args }) => {
     validNeuron(layer, n);
     const player = await requirePlayer(ctx);
-    const date = today();
+    const date = args.date ?? today();
+    if (date > today()) throw new ConvexError("That puzzle is not out yet");
+    const practice = date < today();
     const daily = await dailyFor(ctx, date);
-    if (!daily) throw new ConvexError("No puzzle today yet");
+    if (!daily) throw new ConvexError(practice ? "No puzzle that day" : "No puzzle today yet");
     if (await ctx.db.query("results").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).unique())
-      throw new ConvexError("You already finished today's neuron");
+      throw new ConvexError(`You already finished ${practice ? "that" : "today's"} neuron`);
     const key = neuronKey(layer, n);
     const gs = await ctx.db.query("guesses").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).collect();
     if (gs.some((g) => g.correct)) throw new ConvexError("Waiting for earlier guesses to finish");
     if (gs.length >= LIMITS.guesses) throw new ConvexError("Out of guesses");
     if (gs.some((g) => g.key === key)) throw new ConvexError(`Already guessed L${layer} N${n}`);
-    const id = await ctx.db.insert("guesses", { playerId: player._id, date, key, layer, n, status: "pending" });
+    const id = await ctx.db.insert("guesses", { playerId: player._id, date, key, layer, n, status: "pending", ...(practice ? { practice } : {}) });
     if (!(await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first()))
       await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "guess" });
     const prof = await ctx.db.query("profiles").withIndex("by_key", (q) => q.eq("key", key)).unique();

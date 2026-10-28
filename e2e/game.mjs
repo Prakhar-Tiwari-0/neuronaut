@@ -1,5 +1,6 @@
 // End-to-end run of the whole game against a live stack (Convex, the GPU worker, Vite), in a real browser:
-// sign in, pick a handle, scan and catch a neuron, play today's daily to a solve, enter a bounty and get judged. Also
+// sign in, pick a handle, predict and scan a neuron and catch it, play today's daily to a solve, replay yesterday's for
+// practice, enter a bounty and get judged. Also
 // checks that future puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
 //
 //   node e2e/game.mjs [--url http://127.0.0.1:5173]                                   # the local stack
@@ -91,12 +92,15 @@ try {
   });
 
   let neuron;
-  await step("scan a random neuron", async () => {
+  await step("predict and scan a random neuron", async () => {
     await page.getByRole("button", { name: "Random" }).click();
     await page.waitForURL(/\/n\/\d+\/\d+/);
     neuron = page.url().split("/n/")[1];
+    await page.getByRole("button", { name: /Barely anything/ }).click(); // most neurons are quiet
+    const effect = await page.getByText("What pushing it does").locator("..").innerText({ timeout: 30000 });
+    const verdict = await page.getByText(/^You (called it|said)/).innerText();
     await page.getByText("Strength").waitFor({ timeout: 120000 });
-    return { neuron, card: (await page.locator("main").innerText()).split("\n").slice(2, 6).join(" | ") };
+    return { neuron, effect: effect.replace(/\s+/g, " "), verdict };
   });
 
   await step("catch it", async () => {
@@ -131,6 +135,24 @@ try {
     await page.getByRole("dialog", { name: "Today's result" }).waitFor(); // the result card opens by itself
     await page.keyboard.press("Escape");
     return { answer: ans, solved };
+  });
+
+  await step("practice: replay yesterday's puzzle for no points", async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const ans = convex("admin:answer", { date: yesterday });
+    if (!ans) throw new Error(`no puzzle on ${yesterday}`);
+    const before = await page.getByTitle("Your points").innerText();
+    await page.goto(url + `/daily/${yesterday}`);
+    await page.getByRole("heading", { name: /PRACTICE #\d+/ }).waitFor({ timeout: 30000 });
+    await page.getByLabel("layer", { exact: true }).fill(String(ans.layer));
+    await page.getByLabel("neuron").fill(String(ans.n));
+    await page.getByRole("button", { name: "Guess", exact: true }).click();
+    await page.getByRole("dialog", { name: "Today's result" }).waitFor({ timeout: 60000 });
+    await page.keyboard.press("Escape");
+    await page.getByText("Why each guess scored what it did").or(page.getByText(/Solved in 1/)).first().waitFor();
+    const after = await page.getByTitle("Your points").innerText();
+    if (before !== after) throw new Error(`practice paid points: ${before} -> ${after}`);
+    return { yesterday, points: after };
   });
 
   await step("bounty: enter and get judged", async () => {
@@ -188,7 +210,7 @@ try {
   await clerkApi("DELETE", `/users/${user.id}`).catch((e) => console.log("cleanup:", e.message));
 }
 
-report.ok = report.steps.every((s) => s.ok) && report.steps.length === 11;
+report.ok = report.steps.every((s) => s.ok) && report.steps.length === 12;
 writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 1));
 console.log(`${report.ok ? "PASS" : "FAIL"} -> ${out}`);
 process.exit(report.ok ? 0 : 1);

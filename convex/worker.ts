@@ -123,6 +123,7 @@ const dailyArgs = {
   embedding: v.array(v.float64()),
   band: v.array(v.number()),
   hint: v.string(),
+  difficulty: v.optional(v.union(v.literal("easy"), v.literal("medium"), v.literal("hard"))),
 };
 
 // Stores a generated puzzle. The worker computes its ladder against the full sweep, which only it holds.

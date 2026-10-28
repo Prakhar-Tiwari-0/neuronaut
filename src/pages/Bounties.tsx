@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { LensSearch } from "../components/LensSearch";
 import { Button, ErrorLine, Input, Label, NeuronInput, NeuronLink, Steps } from "../components/ui";
 import { until } from "../lib/format";
+import { useNotes } from "../lib/notes";
 import { errorText, useSession } from "../lib/session";
 
 export function Bounties() {
@@ -58,6 +59,7 @@ export function Bounty() {
   const { requireJoin } = useSession();
   const b = useQuery(api.bounties.get, { slug });
   const submit = useMutation(api.bounties.submit);
+  const { unlock } = useNotes();
   const [rows, setRows] = useState<Row[]>([{ layer: "", n: "", dose: "0.5" }]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(0);
@@ -75,6 +77,7 @@ export function Bounty() {
     try {
       await submit({ slug, pushes: pushes.map((r) => ({ layer: Number(r.layer), n: Number(r.n), dose: Number(r.dose) })) });
       setOpen(0);
+      unlock("dose");
     } catch (e) {
       setError(errorText(e));
     }

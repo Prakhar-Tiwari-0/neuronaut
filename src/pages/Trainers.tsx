@@ -49,12 +49,17 @@ export function Trainer() {
   return (
     <div className="max-w-[920px]">
       <h1 className="text-3xl font-medium tracking-tight">{p.handle}</h1>
-      <div className="mt-6 grid grid-cols-3 gap-6 md:grid-cols-5">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
         <Stat label="Points" value={p.points} />
         <Stat label="Caught" value={p.catches.length} />
         <Stat label="Dailies" value={p.dailySolved} />
         <Stat label="Streak" value={p.streak} sub={`best ${p.bestStreak}`} />
         <Stat label="Bounty wins" value={p.bountyWins} />
+        <Stat
+          label="Predictions"
+          value={p.predicted ? `${Math.round((100 * p.predictedRight) / p.predicted)}%` : "-"}
+          sub={`${p.predictedRight} of ${p.predicted} right`}
+        />
       </div>
       <div className="mt-10">
         <Label className="mb-2">Dex</Label>

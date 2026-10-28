@@ -21,6 +21,10 @@ url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [dependency-groups]
+analysis = [
+    "scikit-learn>=1.9.1",
+    "umap-learn>=0.5.12",
+]
 dev = [
     "pytest>=9.1.1",
 ]

@@ -79,7 +79,7 @@ test("one player's daily solve doesn't reveal the answer, hints or guesses to an
   await alice.mutation(api.daily.guess, { layer: 1, n: 1 });
   await bob.mutation(api.daily.guess, { layer: 1, n: 2 });
   const a = (await alice.query(api.daily.current, {}))!;
-  expect([a.result?.solved, a.answer]).toEqual([true, { layer: 1, n: 99 }]);
+  expect([a.result?.solved, a.answer?.layer, a.answer?.n]).toEqual([true, 1, 99]);
   for (const viewer of [bob, t])
     expect(await viewer.query(api.daily.current, {})).toMatchObject({ result: null, answer: null, band: null, hint: null, solvers: 1 });
   expect((await bob.query(api.daily.current, {}))!.guesses.map((g) => g.n)).toEqual([2]);

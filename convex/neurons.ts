@@ -4,7 +4,9 @@ import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { action, internalMutation, internalQuery, mutation, query, type QueryCtx } from "./_generated/server";
 import { bumpStats, enqueue, globalStats } from "./jobs";
-import { LIMITS, MODEL, POINTS, type Rarity, neuronKey, playerFor, requirePlayer, today, validNeuron } from "./lib";
+import { LIMITS, MODEL, POINTS, PREDICT_POINTS, type Rarity, neuronKey, playerFor, requirePlayer, today, validNeuron } from "./lib";
+import { effectOf, placeOf } from "./map";
+import { effect } from "./schema";
 
 async function profileOf(ctx: QueryCtx, key: string) {
   return await ctx.db.query("profiles").withIndex("by_key", (q) => q.eq("key", key)).unique();
@@ -39,13 +41,15 @@ export const card = query({
     const key = neuronKey(layer, n);
     const row = await ctx.db.query("neurons").withIndex("by_ln", (q) => q.eq("layer", layer).eq("n", n)).unique();
     const player = await playerFor(ctx);
-    const scanned = player
-      ? !!(await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first())
-      : false;
+    const scan = player
+      ? await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first()
+      : null;
+    const scanned = !!scan;
     const caught = await catchOf(ctx, key);
     const owner = caught ? await ctx.db.get(caught.playerId) : null;
     const visible = scanned || !!caught;
     const prof = visible ? await profileOf(ctx, key) : null;
+    const place = visible ? await placeOf(ctx, layer, n) : null;
     return {
       layer,
       n,
@@ -54,34 +58,43 @@ export const card = query({
       scanned,
       status: !visible ? "hidden" : prof ? "ready" : "pending",
       profile: prof ? publicProfile(prof) : null,
+      // what pushing it does and where it sits on the map; hidden like the profile
+      effect: visible ? effectOf(place) : null,
+      place: place?.x !== undefined && place.y !== undefined ? { x: place.x, y: place.y, zone: place.zone ?? "" } : null,
+      focus: place?.focus !== undefined ? { of: 4, n: place.focus, word: place.focusWord ?? null } : null,
+      prediction: scan?.prediction ? { said: scan.prediction, right: !!scan.right } : null,
       caught: caught ? { handle: owner?.handle ?? "?", name: caught.name, points: caught.points, uniqueness: caught.uniqueness } : null,
       mine: !!(caught && player && caught.playerId === player._id),
     };
   },
 });
 
-// Spends a scan to reveal a neuron's card (queues the GPU if nobody measured it yet). No layer/n = a random neuron.
-// Rescanning a neuron you have already seen is free.
+// Spends a scan to reveal a neuron's card (queues the GPU if nobody measured it yet). With a prediction of what pushing
+// it does, the answer comes back at once (it's known from the map data) and a right one pays PREDICT_POINTS. Rescanning
+// a neuron you have already seen is free and scores nothing new.
 export const scan = mutation({
-  args: { layer: v.optional(v.number()), n: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const player = await requirePlayer(ctx);
-    let { layer, n } = args;
-    if (layer === undefined || n === undefined) {
-      layer = Math.floor(Math.random() * MODEL.layers);
-      n = Math.floor(Math.random() * MODEL.width);
-    }
+  args: { layer: v.number(), n: v.number(), prediction: v.optional(effect) },
+  handler: async (ctx, { layer, n, prediction }) => {
     validNeuron(layer, n);
+    const player = await requirePlayer(ctx);
     const key = neuronKey(layer, n);
+    const truth = effectOf(await placeOf(ctx, layer, n));
     const seen = await ctx.db.query("scans").withIndex("by_player_key", (q) => q.eq("playerId", player._id).eq("key", key)).first();
-    if (seen) return { layer, n };
+    if (seen) return { layer, n, effect: truth, right: seen.right ?? null };
     const date = today();
     const used = (await ctx.db.query("scans").withIndex("by_player_date", (q) => q.eq("playerId", player._id).eq("date", date)).collect())
       .filter((s) => s.source === "scan").length;
     if (used >= LIMITS.scans) throw new ConvexError(`Out of scans for today (${LIMITS.scans}). They refill at 00:00 UTC.`);
-    await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "scan" });
+    const right = prediction === undefined ? undefined : prediction === truth;
+    await ctx.db.insert("scans", { playerId: player._id, key, layer, n, date, source: "scan", prediction, right });
+    if (prediction !== undefined)
+      await ctx.db.patch(player._id, {
+        predicted: (player.predicted ?? 0) + 1,
+        predictedRight: (player.predictedRight ?? 0) + (right ? 1 : 0),
+        points: player.points + (right ? PREDICT_POINTS : 0),
+      });
     if (!(await profileOf(ctx, key))) await enqueue(ctx, "profile", `profile:${key}`, { layer, n }, 0, player._id);
-    return { layer, n };
+    return { layer, n, effect: truth, right: right ?? null };
   },
 });
 

@@ -7,6 +7,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "./index.css";
 import { api } from "../convex/_generated/api";
 import { Nav } from "./components/Nav";
+import { NotesProvider } from "./lib/notes";
 import { SessionProvider } from "./lib/session";
 import { useIsDark } from "./lib/theme";
 import { Daily } from "./pages/Daily";
@@ -20,13 +21,22 @@ const Bounty = lazy(() => import("./pages/Bounties").then((m) => ({ default: m.B
 const Trainers = lazy(() => import("./pages/Trainers").then((m) => ({ default: m.Trainers })));
 const Trainer = lazy(() => import("./pages/Trainers").then((m) => ({ default: m.Trainer })));
 const How = lazy(() => import("./pages/How").then((m) => ({ default: m.How })));
+const MapPage = lazy(() => import("./pages/Map").then((m) => ({ default: m.MapPage })));
+const Notes = lazy(() => import("./pages/Notes").then((m) => ({ default: m.Notes })));
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 
 // Send the landing page's queries as soon as the socket opens instead of after React mounts (~230 ms sooner on a fast
 // machine, around a second on a throttled phone). Signed-in players get a refreshed result once auth arrives.
-const PREWARM = { "/": [api.neurons.overview, api.daily.current, api.bounties.list], "/daily": [api.daily.current], "/dex": [api.neurons.overview], "/bounties": [api.bounties.list] } as const;
-for (const query of PREWARM[location.pathname as keyof typeof PREWARM] ?? []) convex.prewarmQuery({ query, args: {}, extendSubscriptionFor: 10_000 });
+const PREWARM = {
+  "/": [api.neurons.overview, api.daily.current, api.bounties.list],
+  "/daily": [api.daily.current],
+  "/dex": [api.neurons.overview],
+  "/bounties": [api.bounties.list],
+  "/map": [api.map.caught],
+} as const;
+for (const query of PREWARM[location.pathname as keyof typeof PREWARM] ?? [])
+  convex.prewarmQuery({ query, args: {}, extendSubscriptionFor: 10_000 });
 
 // Clerk's sign-in modal in the site's colors, following the theme.
 function Clerk({ children }: { children: ReactNode }) {
@@ -65,33 +75,38 @@ createRoot(document.getElementById("root")!).render(
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <BrowserRouter>
           <SessionProvider>
-            <Nav />
-            <main className="mx-auto min-h-[calc(100svh-3.5rem)] max-w-[1120px] px-4 py-8 sm:px-6 sm:py-10">
-              <Suspense fallback={<div className="py-20 text-center text-dim">Loading…</div>}>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/daily" element={<Daily />} />
-                  <Route path="/dex" element={<Dex />} />
-                  <Route path="/n/:layer/:n" element={<Neuron />} />
-                  <Route path="/bounties" element={<Bounties />} />
-                  <Route path="/b/:slug" element={<Bounty />} />
-                  <Route path="/trainers" element={<Trainers />} />
-                  <Route path="/t/:handle" element={<Trainer />} />
-                  <Route path="/how" element={<How />} />
-                  <Route path="*" element={<div className="py-20 text-center text-dim">Nothing here.</div>} />
-                </Routes>
-              </Suspense>
-            </main>
-            <footer className="mx-auto max-w-[1120px] border-t border-line px-4 py-6 text-sm text-dim sm:px-6">
-              Built on{" "}
-              <a
-                href="https://github.com/lyramakesmusic/neuron-explorer"
-                className="font-medium text-fg underline underline-offset-4"
-              >
-                neuron-explorer
-              </a>{" "}
-              by lyramakesmusic.
-            </footer>
+            <NotesProvider>
+              <Nav />
+              <main className="mx-auto min-h-[calc(100svh-3.5rem)] max-w-[1120px] px-4 py-8 sm:px-6 sm:py-10">
+                <Suspense fallback={<div className="py-20 text-center text-dim">Loading…</div>}>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/daily" element={<Daily />} />
+                    <Route path="/daily/:date" element={<Daily />} />
+                    <Route path="/map" element={<MapPage />} />
+                    <Route path="/notes" element={<Notes />} />
+                    <Route path="/dex" element={<Dex />} />
+                    <Route path="/n/:layer/:n" element={<Neuron />} />
+                    <Route path="/bounties" element={<Bounties />} />
+                    <Route path="/b/:slug" element={<Bounty />} />
+                    <Route path="/trainers" element={<Trainers />} />
+                    <Route path="/t/:handle" element={<Trainer />} />
+                    <Route path="/how" element={<How />} />
+                    <Route path="*" element={<div className="py-20 text-center text-dim">Nothing here.</div>} />
+                  </Routes>
+                </Suspense>
+              </main>
+              <footer className="mx-auto max-w-[1120px] border-t border-line px-4 py-6 text-sm text-dim sm:px-6">
+                Built on{" "}
+                <a
+                  href="https://github.com/lyramakesmusic/neuron-explorer"
+                  className="font-medium text-fg underline underline-offset-4"
+                >
+                  neuron-explorer
+                </a>{" "}
+                by lyramakesmusic.
+              </footer>
+            </NotesProvider>
           </SessionProvider>
         </BrowserRouter>
       </ConvexProviderWithClerk>
