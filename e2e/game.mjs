@@ -6,7 +6,8 @@
 //   node e2e/game.mjs [--url http://127.0.0.1:5173]                                   # the local stack
 //   node e2e/game.mjs --url https://neuronaut-swart.vercel.app --deployment greedy-skunk-576   # a cloud deployment
 //
-// Signs in as a throwaway Clerk user (created through Clerk's backend API, deleted at the end), so it needs the dev
+// Signs in as a throwaway Clerk user (created through Clerk's backend API; it and its player are deleted at the end, so
+// test runs don't show on the site), so it needs the dev
 // instance's keys in .env.clerk.local (`clerk env pull --file .env.clerk.local`).
 //
 // Writes e2e/artifacts/<timestamp>/: a screenshot per step and report.json (each step, ok, details), and exits
@@ -227,10 +228,22 @@ try {
   // the failing step is already in the report
 } finally {
   await browser.close();
-  await clerkApi("DELETE", `/users/${user.id}`).catch((e) => console.log("cleanup:", e.message));
+  // leave nothing behind on the live site: the player and everything it did, then the Clerk user. A failed cleanup
+  // fails the run, since its player would stay on the leaderboard. Each deletion runs even if the other fails.
+  const cleanup = { name: "clean up the test player", ok: true, detail: "removed" };
+  const errs = [];
+  try {
+    if (!convex("admin:removePlayer", { handle }) && report.steps[0]?.ok) throw new Error(`no player ${handle} to remove`);
+  } catch (e) {
+    errs.push(`player: ${String(e?.message ?? e).split("\n")[0]}`);
+  }
+  await clerkApi("DELETE", `/users/${user.id}`).catch((e) => errs.push(`clerk: ${String(e?.message ?? e).split("\n")[0]}`));
+  if (errs.length) Object.assign(cleanup, { ok: false, detail: errs.join(" | ") });
+  report.steps.push(cleanup);
+  console.log(`${cleanup.ok ? "ok  " : "FAIL"} ${cleanup.name}: ${JSON.stringify(cleanup.detail)}`);
 }
 
-report.ok = report.steps.every((s) => s.ok) && report.steps.length === 14;
+report.ok = report.steps.every((s) => s.ok) && report.steps.length === 15;
 writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 1));
 console.log(`${report.ok ? "PASS" : "FAIL"} -> ${out}`);
 process.exit(report.ok ? 0 : 1);
