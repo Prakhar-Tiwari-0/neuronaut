@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { Label, NeuronLink, RarityTag, Stat } from "../components/ui";
+import { Label, NeuronLink, RarityTag, ScrollX, Stat } from "../components/ui";
 
 export function Trainers() {
   const top = useQuery(api.players.leaderboard);
@@ -13,29 +13,31 @@ export function Trainers() {
       ) : top.length === 0 ? (
         <div className="py-6 text-dim">Nobody yet. Be first.</div>
       ) : (
-        <table className="mt-6 w-full text-left font-mono text-xs">
-          <thead>
-            <tr>
-              {["#", "trainer", "points", "caught", "dailies", "streak", "best", "bounty wins"].map((h, i) => (
-                <th key={h} className={`pb-2 font-normal ${i > 1 ? "text-right" : ""}`}><Label className="text-faint">{h}</Label></th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {top.map((p, i) => (
-              <tr key={p.handle} className="border-t border-line">
-                <td className="w-8 py-2 text-faint">{i + 1}</td>
-                <td className="py-2"><Link to={`/t/${p.handle}`} className="text-fg hover:underline underline-offset-4">{p.handle}</Link></td>
-                <td className="py-2 text-right text-fg">{p.points}</td>
-                <td className="py-2 text-right">{p.caught}</td>
-                <td className="py-2 text-right">{p.dailySolved}</td>
-                <td className="py-2 text-right">{p.streak}</td>
-                <td className="py-2 text-right">{p.bestStreak}</td>
-                <td className="py-2 text-right">{p.bountyWins}</td>
+        <ScrollX label="Trainer leaderboard">
+          <table className="mt-6 w-max min-w-full text-left font-mono text-xs">
+            <thead>
+              <tr>
+                {["#", "trainer", "points", "caught", "dailies", "streak", "best", "bounty wins"].map((h, i) => (
+                  <th key={h} className={`pb-2 font-normal whitespace-nowrap ${i > 1 ? "text-right" : ""}`}><Label className="text-faint">{h}</Label></th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {top.map((p, i) => (
+                <tr key={p.handle} className="border-t border-line">
+                  <td className="w-8 py-2 whitespace-nowrap text-faint">{i + 1}</td>
+                  <td className="py-2 whitespace-nowrap"><Link to={`/t/${p.handle}`} title={p.handle} className="text-fg hover:underline underline-offset-4">{p.handle}</Link></td>
+                  <td className="py-2 whitespace-nowrap text-right text-fg">{p.points}</td>
+                  <td className="py-2 whitespace-nowrap text-right">{p.caught}</td>
+                  <td className="py-2 whitespace-nowrap text-right">{p.dailySolved}</td>
+                  <td className="py-2 whitespace-nowrap text-right">{p.streak}</td>
+                  <td className="py-2 whitespace-nowrap text-right">{p.bestStreak}</td>
+                  <td className="py-2 whitespace-nowrap text-right">{p.bountyWins}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </ScrollX>
       )}
     </div>
   );

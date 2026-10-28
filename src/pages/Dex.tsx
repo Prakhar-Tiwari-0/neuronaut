@@ -5,7 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { LIMITS, MODEL, RARITIES, type Rarity } from "../../convex/rules";
 import { CaughtMap } from "../components/CaughtMap";
 import { LensSearch } from "../components/LensSearch";
-import { Button, ErrorLine, Label, NeuronInput, NeuronLink, RarityTag, Steps, Tokens } from "../components/ui";
+import { Button, ErrorLine, Label, NeuronInput, NeuronLink, RarityTag, ScrollX, Steps, Tokens } from "../components/ui";
 import { ago, RARITY_COLOR } from "../lib/format";
 import { useSession } from "../lib/session";
 
@@ -116,23 +116,25 @@ function Caught({ rarity }: { rarity?: Rarity }) {
   if (!results.length) return <div className="py-6 text-dim">Nothing caught{rarity ? ` at ${rarity}` : ""} yet.</div>;
   return (
     <>
-      <table className="w-full text-left text-[15px]">
-        <tbody>
-          {results.map((c) => (
-            <tr key={`${c.layer}:${c.n}`} className="border-b border-line align-baseline">
-              <td className="w-28 py-3"><NeuronLink layer={c.layer} n={c.n} /></td>
-              <td className="py-3 font-medium">{c.name}</td>
-              <td className="w-28 py-3"><RarityTag rarity={c.rarity} /></td>
-              <td className="hidden py-3 text-dim md:table-cell"><Tokens tokens={c.words} /></td>
-              <td className="hidden w-28 py-3 font-mono text-xs sm:table-cell">
-                <Link to={`/t/${c.handle}`} className="hover:underline underline-offset-4">{c.handle}</Link>
-              </td>
-              <td className="w-14 py-3 text-right font-mono text-xs">{c.points}</td>
-              <td className="w-12 py-3 text-right font-mono text-xs text-faint">{ago(c.at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <ScrollX label="Caught neurons">
+        <table className="w-max min-w-full text-left text-[15px]">
+          <tbody>
+            {results.map((c) => (
+              <tr key={`${c.layer}:${c.n}`} className="border-b border-line align-baseline">
+                <td className="py-3 whitespace-nowrap"><NeuronLink layer={c.layer} n={c.n} /></td>
+                <td className="py-3 font-medium whitespace-nowrap" title={c.name}>{c.name}</td>
+                <td className="py-3 whitespace-nowrap"><RarityTag rarity={c.rarity} /></td>
+                <td className="max-w-xs py-3 text-dim"><Tokens tokens={c.words} /></td>
+                <td className="py-3 font-mono text-xs whitespace-nowrap">
+                  <Link to={`/t/${c.handle}`} title={c.handle} className="hover:underline underline-offset-4">{c.handle}</Link>
+                </td>
+                <td className="py-3 text-right font-mono text-xs whitespace-nowrap">{c.points}</td>
+                <td className="py-3 text-right font-mono text-xs whitespace-nowrap text-faint">{ago(c.at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ScrollX>
       {status === "CanLoadMore" && (
         <Button variant="ghost" className="mt-4" onClick={() => loadMore(50)}>
           More
@@ -142,26 +144,28 @@ function Caught({ rarity }: { rarity?: Rarity }) {
   );
 }
 
-function Seen({ signedIn }: { signedIn: boolean }) {
+export function Seen({ signedIn }: { signedIn: boolean }) {
   const seen = useQuery(api.neurons.seen, {});
   if (!signedIn) return <div className="py-6 text-dim">Pick a handle and scan some neurons.</div>;
   if (seen === undefined) return <div className="py-6 text-faint">loading</div>;
   if (!seen.length) return <div className="py-6 text-dim">You haven't scanned anything yet.</div>;
   return (
-    <table className="w-full text-left text-[15px]">
-      <tbody>
-        {seen.map((s) => (
-          <tr key={`${s.layer}:${s.n}`} className="border-b border-line align-baseline">
-            <td className="w-28 py-3"><NeuronLink layer={s.layer} n={s.n} /></td>
-            <td className="w-32 py-3">{s.rarity ? <RarityTag rarity={s.rarity} /> : <span className="font-mono text-xs text-faint">measuring</span>}</td>
-            <td className="py-3 text-dim"><Tokens tokens={s.words} /></td>
-            <td className="w-20 py-3 font-mono text-xs text-faint">{s.source === "guess" ? "guessed" : "scanned"}</td>
-            <td className="w-20 py-3 text-right font-mono text-xs">
-              {s.caughtBy === "you" ? <span className="text-good">yours</span> : s.caughtBy ? <span className="text-faint">taken</span> : ""}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ScrollX label="Neurons you have seen">
+      <table className="w-max min-w-full text-left text-[15px]">
+        <tbody>
+          {seen.map((s) => (
+            <tr key={`${s.layer}:${s.n}`} className="border-b border-line align-baseline">
+              <td className="py-3 whitespace-nowrap"><NeuronLink layer={s.layer} n={s.n} /></td>
+              <td className="py-3 whitespace-nowrap">{s.rarity ? <RarityTag rarity={s.rarity} /> : <span className="font-mono text-xs whitespace-nowrap text-faint">measuring</span>}</td>
+              <td className="max-w-xs py-3 text-dim"><Tokens tokens={s.words} /></td>
+              <td className="py-3 font-mono text-xs whitespace-nowrap text-faint">{s.source === "guess" ? "guessed" : "scanned"}</td>
+              <td className="py-3 text-right font-mono text-xs whitespace-nowrap">
+                {s.caughtBy === "you" ? <span className="text-good">yours</span> : s.caughtBy ? <span className="text-faint">taken</span> : ""}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </ScrollX>
   );
 }
