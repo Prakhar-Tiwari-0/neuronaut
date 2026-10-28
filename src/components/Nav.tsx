@@ -33,8 +33,10 @@ export function Nav() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-bg/95 backdrop-blur-sm">
-      {/* phones: logo and controls on one row, the links on a second row that scrolls sideways */}
-      <div className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-6 px-4 sm:px-6">
+      {/* phones: logo and controls on one row, the links on a second row that scrolls sideways. Signed in, the
+          controls ask for 13.5rem (a handle of at least 3rem); if that doesn't fit beside the logo they wrap to their
+          own row, otherwise the handle truncates. */}
+      <div className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-4 px-4 sm:px-6 md:gap-x-6">
         <Link to="/" className="flex h-14 shrink-0 items-center font-pixel text-lg tracking-wide">
           NEURONAUT
         </Link>
@@ -49,7 +51,7 @@ export function Nav() {
             </NavLink>
           ))}
         </nav>
-        <div className="ml-auto flex h-14 min-w-0 max-w-full items-center gap-1">
+        <div className={`flex h-14 min-w-0 flex-1 items-center justify-end gap-1 ${me ? "basis-54" : ""}`}>
           <IconButton label="How to play" onClick={() => setHelp(true)}>
             <span className="text-lg font-semibold">?</span>
           </IconButton>

@@ -46,7 +46,7 @@ export function Dex() {
         />
       </div>
 
-      <section className="grid gap-6 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <form
           className="rounded-2xl border border-line bg-card p-5"
           onSubmit={(e) => {
@@ -117,19 +117,19 @@ function Caught({ rarity }: { rarity?: Rarity }) {
   return (
     <>
       <ScrollX label="Caught neurons">
-        <table className="w-max min-w-full text-left text-[15px]">
+        <table className="w-max min-w-full whitespace-nowrap text-left [&_td+td]:pl-4 [&_th+th]:pl-4 text-[15px]">
           <tbody>
             {results.map((c) => (
               <tr key={`${c.layer}:${c.n}`} className="border-b border-line align-baseline">
-                <td className="py-3 whitespace-nowrap"><NeuronLink layer={c.layer} n={c.n} /></td>
-                <td className="py-3 font-medium whitespace-nowrap" title={c.name}>{c.name}</td>
-                <td className="py-3 whitespace-nowrap"><RarityTag rarity={c.rarity} /></td>
-                <td className="max-w-xs py-3 text-dim"><Tokens tokens={c.words} /></td>
-                <td className="py-3 font-mono text-xs whitespace-nowrap">
-                  <Link to={`/t/${c.handle}`} title={c.handle} className="hover:underline underline-offset-4">{c.handle}</Link>
+                <td className="py-3"><NeuronLink layer={c.layer} n={c.n} /></td>
+                <td className="py-3 font-medium">{c.name}</td>
+                <td className="py-3"><RarityTag rarity={c.rarity} /></td>
+                <td className="py-3 text-dim whitespace-normal"><div className="max-w-xs"><Tokens tokens={c.words} /></div></td>
+                <td className="py-3 font-mono text-xs">
+                  <Link to={`/t/${c.handle}`} className="hover:underline underline-offset-4">{c.handle}</Link>
                 </td>
-                <td className="py-3 text-right font-mono text-xs whitespace-nowrap">{c.points}</td>
-                <td className="py-3 text-right font-mono text-xs whitespace-nowrap text-faint">{ago(c.at)}</td>
+                <td className="py-3 text-right font-mono text-xs">{c.points}</td>
+                <td className="py-3 text-right font-mono text-xs text-faint">{ago(c.at)}</td>
               </tr>
             ))}
           </tbody>
@@ -144,22 +144,22 @@ function Caught({ rarity }: { rarity?: Rarity }) {
   );
 }
 
-export function Seen({ signedIn }: { signedIn: boolean }) {
+function Seen({ signedIn }: { signedIn: boolean }) {
   const seen = useQuery(api.neurons.seen, {});
   if (!signedIn) return <div className="py-6 text-dim">Pick a handle and scan some neurons.</div>;
   if (seen === undefined) return <div className="py-6 text-faint">loading</div>;
   if (!seen.length) return <div className="py-6 text-dim">You haven't scanned anything yet.</div>;
   return (
     <ScrollX label="Neurons you have seen">
-      <table className="w-max min-w-full text-left text-[15px]">
+      <table className="w-max min-w-full whitespace-nowrap text-left [&_td+td]:pl-4 [&_th+th]:pl-4 text-[15px]">
         <tbody>
           {seen.map((s) => (
             <tr key={`${s.layer}:${s.n}`} className="border-b border-line align-baseline">
-              <td className="py-3 whitespace-nowrap"><NeuronLink layer={s.layer} n={s.n} /></td>
-              <td className="py-3 whitespace-nowrap">{s.rarity ? <RarityTag rarity={s.rarity} /> : <span className="font-mono text-xs whitespace-nowrap text-faint">measuring</span>}</td>
-              <td className="max-w-xs py-3 text-dim"><Tokens tokens={s.words} /></td>
-              <td className="py-3 font-mono text-xs whitespace-nowrap text-faint">{s.source === "guess" ? "guessed" : "scanned"}</td>
-              <td className="py-3 text-right font-mono text-xs whitespace-nowrap">
+              <td className="py-3"><NeuronLink layer={s.layer} n={s.n} /></td>
+              <td className="py-3">{s.rarity ? <RarityTag rarity={s.rarity} /> : <span className="font-mono text-xs text-faint">measuring</span>}</td>
+              <td className="py-3 text-dim whitespace-normal"><div className="max-w-xs"><Tokens tokens={s.words} /></div></td>
+              <td className="py-3 font-mono text-xs text-faint">{s.source === "guess" ? "guessed" : "scanned"}</td>
+              <td className="py-3 text-right font-mono text-xs">
                 {s.caughtBy === "you" ? <span className="text-good">yours</span> : s.caughtBy ? <span className="text-faint">taken</span> : ""}
               </td>
             </tr>

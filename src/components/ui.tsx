@@ -78,10 +78,11 @@ export function Label({ children, className = "" }: { children: ReactNode; class
   return <div className={`text-xs font-semibold uppercase tracking-[0.08em] text-dim ${className}`}>{children}</div>;
 }
 
-// Wide content scrolls inside the page. The region is a tab stop so a keyboard can reach columns that are not links.
-export function ScrollX({ label, children }: { label: string; children: ReactNode }) {
+// Wide content scrolls inside the page. The region is a tab stop so a keyboard can reach columns that are not links;
+// that's an extra stop on desktop too, where nothing overflows.
+export function ScrollX({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) {
   return (
-    <div role="region" aria-label={label} tabIndex={0} className="max-w-full overflow-x-auto overscroll-x-contain">
+    <div role="region" aria-label={label} tabIndex={0} className={`max-w-full overflow-x-auto overscroll-x-contain ${className}`}>
       {children}
     </div>
   );
