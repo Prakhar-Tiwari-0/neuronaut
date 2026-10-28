@@ -4,7 +4,7 @@
 // checks that future puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
 //
 //   node e2e/game.mjs [--url http://127.0.0.1:5173]                                   # the local stack
-//   node e2e/game.mjs --url https://neuronaut-swart.vercel.app --deployment greedy-skunk-576   # a cloud deployment
+//   node e2e/game.mjs --url https://neuronaut.ishaanko.com --deployment greedy-skunk-576   # a cloud deployment
 //
 // Signs in as a throwaway Clerk user (created through Clerk's backend API; it and its player are deleted at the end, so
 // test runs don't show on the site), so it needs the dev
