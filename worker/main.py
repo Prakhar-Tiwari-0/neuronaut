@@ -99,26 +99,21 @@ class Worker:
         print(f"profiled {len(res)} in {time.time() - t:.1f}s", flush=True)
 
     def combo(self, job):
-        """A lab experiment: two pushes alone and together on the profile prompts. Each shift has the generic part any
-        push of that size causes taken out (the random-direction mean at its layer, scaled by the dose's size), so what's compared
-        is the neurons' own effects. additivity: cosine of the joint effect with the sum of the separate ones (1 = they
-        just add up). gain: the joint effect's size over the sum's. towardA/B: the joint effect's cosine with each alone."""
+        """A lab experiment: two pushes alone and together while the model reads the same normal replies (Engine.forced),
+        so any difference between the joint effect and the sum of the separate ones comes from the layers after the
+        pushes, not from decoding going a different way. additivity: cosine of the joint change with the sum (1 = they
+        just add up). gain: the joint change's size over the sum's. towardA/B: its cosine with each alone. faint: one
+        of them is quiet on its card, so the pair trivially looks like the other. texts: replies with both pushed."""
         a = job["args"]
         (la, na, da), (lb, nb, db) = [(int(p["layer"]), int(p["n"]), float(p["dose"])) for p in (a["a"], a["b"])]
         pa, pb = self.eng.push(la, na, da), self.eng.push(lb, nb, db)
-        ma, mb, mab = self.eng.measure([[pa], [pb], [pa, pb]])
-        ga, gb = self.eng.ctrl_mean[la] * (abs(da) / PROFILE_DOSE), self.eng.ctrl_mean[lb] * (abs(db) / PROFILE_DOSE)
-        ea, eb, eab = ma["shift"] - ga, mb["shift"] - gb, mab["shift"] - ga - gb
-        cos = lambda x, y: round(float(torch.nn.functional.cosine_similarity(x.float(), y.float(), dim=0)), 3)
+        ea, eb, eab = self.eng.forced([[pa], [pb], [pa, pb]])
+        cos = lambda x, y: round(float(torch.nn.functional.cosine_similarity(x, y, dim=0)), 3)
         total = ea + eb
-        # strength as on a card (z against random pushes, rescaled to the profile dose): a quiet neuron's effect is
-        # mostly noise, and so is any cosine with it
-        def z(e, l, d):
-            size = float(e.norm()) * PROFILE_DOSE / max(abs(d), 1e-6)
-            return (size - self.eng.ctrl_mu[l]) / max(self.eng.ctrl_sd[l], 1e-6)
-
-        faint = min(z(ea, la, da), z(eb, lb, db)) < QUIET_Z
-        self.call("mutation", "worker:finishCombo", id=job["id"], experimentId=a["experimentId"], texts=mab["texts"],
+        cards = [self.store.get(la, na), self.store.get(lb, nb)]
+        faint = any(c is None or c["z"] < QUIET_Z for c in cards)
+        texts = self.eng.measure([[pa, pb]])[0]["texts"]
+        self.call("mutation", "worker:finishCombo", id=job["id"], experimentId=a["experimentId"], texts=texts,
                   additivity=cos(eab, total), gain=round(float(eab.norm() / total.norm().clamp(min=1e-6)), 3),
                   towardA=cos(eab, ea), towardB=cos(eab, eb), faint=faint)
         print(f"combo L{la}N{na} + L{lb}N{nb}: additivity {cos(eab, total)}", flush=True)

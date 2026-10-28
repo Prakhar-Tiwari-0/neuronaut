@@ -11,11 +11,19 @@ import { errorText, useSession } from "../lib/session";
 type Slot = { layer: string; n: string; dose: string };
 const empty: Slot = { layer: "", n: "", dose: "0.6" };
 
-// How an experiment came out, in words. additivity is the cosine between the joint effect and the sum of the two.
-function verdict(additivity: number) {
-  if (additivity >= 0.85) return { title: "They add up", body: "Pushing both does about what you'd get by adding their separate effects." };
-  if (additivity >= 0.6) return { title: "Mostly add up", body: "Close to the sum of the two, with something extra or something lost." };
-  return { title: "They interfere", body: "Together they do something neither sum predicts: the features overlap, or later layers react nonlinearly." };
+// How an experiment came out, in words. additivity: cosine between the joint change and the sum of the two; gain: the
+// joint change's size over the sum's. Calibrated on real runs: small doses land near 0.997, a dose of 1.0 near 0.9.
+function verdict(additivity: number, gain: number) {
+  const size =
+    gain < 0.85
+      ? " Together they come out weaker than the sum: both push the same way, and the effect saturates."
+      : gain > 1.15
+        ? " Together they come out stronger than the sum."
+        : "";
+  if (additivity >= 0.98)
+    return { title: "They add up", body: "The pair changes the model's last layer by almost exactly the sum of the two. Up close, the network is nearly linear." + size };
+  if (additivity >= 0.9) return { title: "Mostly add up", body: "Close to the sum, bent a little by the layers in between." + size };
+  return { title: "They interfere", body: "The layers after the pushes bend the sum into something else." + size };
 }
 
 export function Lab() {
@@ -52,7 +60,7 @@ export function Lab() {
         <Steps
           steps={[
             <>Pick two neurons, ideally ones you've already seen.</>,
-            <>The model is pushed with each alone and with both, on the same four questions.</>,
+            <>The model reads the same normal replies with each push alone, then both.</>,
             <>See whether the pair does the sum of the two, or something new. {LIMITS.experiments} a day.</>,
           ]}
         />
@@ -62,7 +70,7 @@ export function Lab() {
         <section className="space-y-6">
           {mine === undefined ? null : mine.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-line-strong p-6 text-dim">
-              No experiments yet. Try two neurons from the same zone of the map, then two from far apart.
+              No experiments yet. Try a pair at a small dose, then the same pair at 1.0, then two neurons that push the same word.
             </div>
           ) : (
             mine.map((e) => {
@@ -71,7 +79,7 @@ export function Lab() {
                   ? null
                   : e.faint
                     ? { title: "Too faint to tell", body: "One of these barely changes anything alone, so there is little to add up and the numbers are mostly noise. Try two stronger neurons." }
-                    : verdict(e.additivity);
+                    : verdict(e.additivity, e.gain ?? 1);
               return (
                 <article key={e.id} className="rounded-2xl border border-line bg-card p-6">
                   <div className="flex flex-wrap items-center gap-2 font-mono text-sm">
@@ -85,7 +93,7 @@ export function Lab() {
                       <div className="mt-3 text-2xl font-semibold">{v.title}</div>
                       <p className="text-dim">{v.body}</p>
                       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <Metric label="Additivity" value={e.additivity!.toFixed(2)} sub="cosine with the sum" />
+                        <Metric label="Additivity" value={e.additivity!.toFixed(3)} sub="cosine with the sum" />
                         <Metric label="Size" value={`${e.gain!.toFixed(2)}×`} sub="of the sum" />
                         <Metric label={`Like ${dexNo(e.a.layer, e.a.n)}`} value={e.towardA!.toFixed(2)} sub="cosine" />
                         <Metric label={`Like ${dexNo(e.b.layer, e.b.n)}`} value={e.towardB!.toFixed(2)} sub="cosine" />

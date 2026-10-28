@@ -28,7 +28,7 @@ export const NOTES = [
     unlock: "See an early-layer neuron change the replies.",
     body: [
       "Layers after this one rework everything it writes, so reading its direction as if it were the last layer gives junk. Its logit lens is noise even when its effect is clear.",
-      "A layer 6 neuron can turn every answer toward property law while its logit lens says 'ufr 期待 rafo'. For early neurons, trust the effect and the steer lens, not the logit lens.",
+      "Neuron 7429 in layer 5 works airports into every reply. Its steer lens shows it (Tokyo, Osaka, Seoul), while its logit lens reads '表面 洲 lette 秘密'. For early neurons, trust the effect and the steer lens, not the logit lens.",
     ],
   },
   {
@@ -81,8 +81,8 @@ export const NOTES = [
     title: "Do effects add up?",
     unlock: "Run an experiment in the lab.",
     body: [
-      "If pushing two neurons together does what you'd get by adding their separate effects, the model is acting linearly there. A lot of interpretability leans on that assumption.",
-      "When the combination goes somewhere else, the neurons interfere: their features overlap, or the layers after them respond nonlinearly.",
+      "The lab has the model read the same normal reply three times: with one push, with the other, and with both. If the last layer changes by exactly the sum of the two separate changes, every layer in between acted linearly.",
+      "Small pushes usually add up almost perfectly. Up close a network is nearly linear, which is why adding a direction steers it at all. Bigger pushes bend the sum, and two neurons pushing the same way often come out weaker than their total. The reply itself can still follow just one of them, since each word the model picks steers the rest.",
     ],
   },
 ] as const;

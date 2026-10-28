@@ -187,6 +187,29 @@ class Engine:
         pooled = (z * m[..., None]).sum(1) / m.sum(1, keepdim=True)
         return pooled, nll
 
+    def forced(self, rows):
+        """Teacher-forced: the model reads the unsteered replies to the profile prompts with each row's pushes applied.
+        Returns per row the change those pushes cause in the final layer's hidden state, averaged over reply tokens and
+        prompts [R, hidden]. The text is fixed, so this isolates what the layers after a push do with it from how
+        decoding would have diverged."""
+        R, H = len(rows), self.sp.cfg.hidden_size
+        out = torch.zeros(R, H, device=self.dev)
+        for b in self.base:
+            q = self.chat(b["prompt"])
+            ids = torch.tensor([q + (b["ids"] or [self.tok.eos_token_id or 0])] * (R + 1), device=self.dev)
+            push = {}
+            for r, ps in enumerate(rows):  # row 0 stays unsteered
+                for layer, v in ps:
+                    push.setdefault(layer, torch.zeros(R + 1, H, device=self.dev))[r + 1] += v
+            self._push = push
+            try:
+                with torch.inference_mode():
+                    last = self.sp.lm(input_ids=ids, use_cache=False).last_hidden_state[:, len(q):].float().mean(1)
+            finally:
+                self._push = {}
+            out += last[1:] - last[0]
+        return out / len(self.base)
+
     def _baseline(self, prompts):
         """Unsteered responses to prompts with their pools and NLLs."""
         out = []

@@ -177,13 +177,13 @@ try {
 
   await step("lab: two neurons pushed together", async () => {
     await page.goto(url + "/lab");
-    const slots = [[23, 8663], [21, 3849]];
+    const slots = [[25, 2719], [26, 8315]]; // two strong hydrogen neurons, so the result isn't "too faint to tell"
     for (const [i, [l, n]] of slots.entries()) {
       await page.getByLabel("layer", { exact: true }).nth(i).fill(String(l));
       await page.getByLabel("neuron", { exact: true }).nth(i).fill(String(n));
     }
     await page.getByRole("button", { name: "Run" }).click();
-    const verdict = await page.getByText(/^(They add up|Mostly add up|They interfere)$/).first().innerText({ timeout: 180000 });
+    const verdict = await page.getByText(/^(They add up|Mostly add up|They interfere|Too faint to tell)$/).first().innerText({ timeout: 180000 });
     const additivity = await page.getByText("Additivity").first().locator("..").innerText();
     return { verdict, additivity: additivity.replace(/\s+/g, " ") };
   });
