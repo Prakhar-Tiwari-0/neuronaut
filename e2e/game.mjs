@@ -117,7 +117,7 @@ try {
     await page.getByRole("heading", { name: /DAILY #\d+/ }).waitFor({ timeout: 30000 });
     for (const [l, n] of [[5, 100], [17, 4242]]) {
       await page.getByLabel("layer", { exact: true }).fill(String(l));
-      await page.getByLabel("neuron").fill(String(n));
+      await page.getByLabel("neuron", { exact: true }).fill(String(n));
       await page.getByRole("button", { name: "Guess", exact: true }).click();
       await page.waitForFunction(() => !document.querySelector('input[aria-label="neuron"]')?.value);  // guess landed
     }
@@ -129,7 +129,7 @@ try {
     const date = new Date().toISOString().slice(0, 10);
     const ans = convex("admin:answer", { date });
     await page.getByLabel("layer", { exact: true }).fill(String(ans.layer));
-    await page.getByLabel("neuron").fill(String(ans.n));
+    await page.getByLabel("neuron", { exact: true }).fill(String(ans.n));
     await page.getByRole("button", { name: "Guess", exact: true }).click();
     const solved = await page.getByText(/Solved in \d+/).first().textContent({ timeout: 60000 });
     await page.getByRole("dialog", { name: "Today's result" }).waitFor(); // the result card opens by itself
@@ -145,7 +145,7 @@ try {
     await page.goto(url + `/daily/${yesterday}`);
     await page.getByRole("heading", { name: /PRACTICE #\d+/ }).waitFor({ timeout: 30000 });
     await page.getByLabel("layer", { exact: true }).fill(String(ans.layer));
-    await page.getByLabel("neuron").fill(String(ans.n));
+    await page.getByLabel("neuron", { exact: true }).fill(String(ans.n));
     await page.getByRole("button", { name: "Guess", exact: true }).click();
     await page.getByRole("dialog", { name: "Today's result" }).waitFor({ timeout: 60000 });
     await page.keyboard.press("Escape");
@@ -160,7 +160,7 @@ try {
     await page.getByText("Lost at Sea").first().click();
     await page.getByRole("heading", { name: "Lost at Sea" }).waitFor();
     await page.getByLabel("layer", { exact: true }).fill("23");
-    await page.getByLabel("neuron").fill("8663");
+    await page.getByLabel("neuron", { exact: true }).fill("8663");
     await page.getByLabel("dose").fill("0.6");
     await page.getByRole("button", { name: "Submit" }).click();
     await page.getByText(/concept -?\d/).waitFor({ timeout: 120000 });
