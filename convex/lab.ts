@@ -34,6 +34,17 @@ export const mine = query({
     const player = await playerFor(ctx);
     if (!player) return [];
     const rows = await ctx.db.query("experiments").withIndex("by_player_date", (q) => q.eq("playerId", player._id)).order("desc").take(30);
-    return rows.map(({ _id, a, b, status, texts, additivity, gain, towardA, towardB }) => ({ id: _id, a, b, status, texts, additivity, gain, towardA, towardB }));
+    return rows.map(({ _id, a, b, status, texts, additivity, gain, towardA, towardB, faint }) => ({
+      id: _id,
+      a,
+      b,
+      status,
+      texts,
+      additivity,
+      gain,
+      towardA,
+      towardB,
+      faint: !!faint,
+    }));
   },
 });

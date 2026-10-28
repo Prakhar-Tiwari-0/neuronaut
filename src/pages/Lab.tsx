@@ -66,7 +66,12 @@ export function Lab() {
             </div>
           ) : (
             mine.map((e) => {
-              const v = e.additivity === undefined ? null : verdict(e.additivity);
+              const v =
+                e.additivity === undefined
+                  ? null
+                  : e.faint
+                    ? { title: "Too faint to tell", body: "One of these barely changes anything alone, so there is little to add up and the numbers are mostly noise. Try two stronger neurons." }
+                    : verdict(e.additivity);
               return (
                 <article key={e.id} className="rounded-2xl border border-line bg-card p-6">
                   <div className="flex flex-wrap items-center gap-2 font-mono text-sm">

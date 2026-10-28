@@ -1,6 +1,6 @@
 // End-to-end run of the whole game against a live stack (Convex, the GPU worker, Vite), in a real browser:
 // sign in, pick a handle, predict and scan a neuron and catch it, play today's daily to a solve, replay yesterday's for
-// practice, enter a bounty and get judged. Also
+// practice, see the map, run a lab experiment, enter a bounty and get judged. Also
 // checks that future puzzles stay hidden and that a NaN bounty dose is refused, straight against the backend.
 //
 //   node e2e/game.mjs [--url http://127.0.0.1:5173]                                   # the local stack
@@ -168,6 +168,26 @@ try {
     return { entry: entry.replace(/\s+/g, " ") };
   });
 
+  await step("map: visited neurons show up", async () => {
+    await page.goto(url + "/map");
+    const line = await page.getByText(/\d+ seen by you/).innerText({ timeout: 30000 });
+    if (/ 0 seen by you/.test(line)) throw new Error(`nothing on the map after solving the daily: ${line}`);
+    return { line };
+  });
+
+  await step("lab: two neurons pushed together", async () => {
+    await page.goto(url + "/lab");
+    const slots = [[23, 8663], [21, 3849]];
+    for (const [i, [l, n]] of slots.entries()) {
+      await page.getByLabel("layer", { exact: true }).nth(i).fill(String(l));
+      await page.getByLabel("neuron", { exact: true }).nth(i).fill(String(n));
+    }
+    await page.getByRole("button", { name: "Run" }).click();
+    const verdict = await page.getByText(/^(They add up|Mostly add up|They interfere)$/).first().innerText({ timeout: 180000 });
+    const additivity = await page.getByText("Additivity").first().locator("..").innerText();
+    return { verdict, additivity: additivity.replace(/\s+/g, " ") };
+  });
+
   await step("future dailies stay hidden", async () => {
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     const d = convex("daily:current", { date: tomorrow });
@@ -210,7 +230,7 @@ try {
   await clerkApi("DELETE", `/users/${user.id}`).catch((e) => console.log("cleanup:", e.message));
 }
 
-report.ok = report.steps.every((s) => s.ok) && report.steps.length === 12;
+report.ok = report.steps.every((s) => s.ok) && report.steps.length === 14;
 writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 1));
 console.log(`${report.ok ? "PASS" : "FAIL"} -> ${out}`);
 process.exit(report.ok ? 0 : 1);

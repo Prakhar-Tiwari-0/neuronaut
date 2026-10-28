@@ -184,6 +184,7 @@ export default defineSchema({
     gain: v.optional(v.number()),
     towardA: v.optional(v.number()),
     towardB: v.optional(v.number()),
+    faint: v.optional(v.boolean()), // one of them barely does anything alone, so the cosines are mostly noise
   }).index("by_player_date", ["playerId", "date"]),
 
   bounties: defineTable({

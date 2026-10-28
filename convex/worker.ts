@@ -89,6 +89,7 @@ export const finishCombo = mutation({
     gain: v.number(),
     towardA: v.number(),
     towardB: v.number(),
+    faint: v.optional(v.boolean()),
   },
   handler: async (ctx, { secret, id, experimentId, ...result }) => {
     checkWorker(secret);

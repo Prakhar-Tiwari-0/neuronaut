@@ -27,7 +27,7 @@ from lens import Lens, norm
 from store import Store
 
 MODEL = os.environ.get("GAME_MODEL", "Qwen/Qwen3.5-4B")
-RARE_Z, GLITCH_NLL, GLITCH_DISTINCT = 3.5, 3.2, 0.5  # mirrors convex/rules.ts
+RARE_Z, QUIET_Z, GLITCH_NLL, GLITCH_DISTINCT = 3.5, 1.5, 3.2, 0.5  # mirrors convex/rules.ts
 DISPLAY_PROMPTS = [  # daily puzzle prompts: never the profile prompts, so a card's text can't be matched verbatim
     "What do you think about on a rainy afternoon?",
     "Write a short note to a friend.",
@@ -111,9 +111,16 @@ class Worker:
         ea, eb, eab = ma["shift"] - ga, mb["shift"] - gb, mab["shift"] - ga - gb
         cos = lambda x, y: round(float(torch.nn.functional.cosine_similarity(x.float(), y.float(), dim=0)), 3)
         total = ea + eb
+        # strength as on a card (z against random pushes, rescaled to the profile dose): a quiet neuron's effect is
+        # mostly noise, and so is any cosine with it
+        def z(e, l, d):
+            size = float(e.norm()) * PROFILE_DOSE / max(abs(d), 1e-6)
+            return (size - self.eng.ctrl_mu[l]) / max(self.eng.ctrl_sd[l], 1e-6)
+
+        faint = min(z(ea, la, da), z(eb, lb, db)) < QUIET_Z
         self.call("mutation", "worker:finishCombo", id=job["id"], experimentId=a["experimentId"], texts=mab["texts"],
                   additivity=cos(eab, total), gain=round(float(eab.norm() / total.norm().clamp(min=1e-6)), 3),
-                  towardA=cos(eab, ea), towardB=cos(eab, eb))
+                  towardA=cos(eab, ea), towardB=cos(eab, eb), faint=faint)
         print(f"combo L{la}N{na} + L{lb}N{nb}: additivity {cos(eab, total)}", flush=True)
 
     def judge(self, job):
