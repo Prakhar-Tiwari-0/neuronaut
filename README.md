@@ -10,14 +10,6 @@ Built on [neuron-explorer](https://github.com/lyramakesmusic/neuron-explorer) by
 [lyramakesmusic](https://github.com/lyramakesmusic). The steering method, the steer lens and the
 neuron index come from there.
 
-<!-- sweep:start -->
-**Sweep progress** (every neuron in Qwen3.5-4B, measured once on a 4080 Super)
-
-`██████████████████████████████` 294,912 / 294,912 (100.0%)
-
-**Done.** Updated 2026-10-28 05:23 UTC.
-<!-- sweep:end -->
-
 ## Modes
 
 - **Dex.** Search every neuron's lenses for free. Predict what a push will do, then spend a scan to see what it actually
@@ -73,11 +65,9 @@ uv run --group analysis python places.py     # writes ../data/places.jsonl and .
 bunx convex import --table places --replace ../data/places.jsonl
 ```
 
-To leave it all running, use `./up.sh`. It starts Convex, Vite, the worker and the README updater as systemd user
+To leave it all running, use `./up.sh`. It starts Convex, Vite and the worker as systemd user
 services that restart on a crash and log to `logs/`. `./up.sh stop` stops them. `nohup` and `setsid` stay in the
 terminal's cgroup and die with it, so they don't work here.
-
-`worker/readme_progress.py` redraws the sweep bar above and pushes it every 10 minutes.
 
 Production: pushes to `main` deploy the site and the Convex backend together on Vercel (`vercel.json` runs
 `convex deploy` with the prod deploy key). The GPU worker serves production with `WORKER_ENV=.env.prod.local ./up.sh`,

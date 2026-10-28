@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts the local stack as systemd user services, so it outlives the terminal or agent session that started it and
-# restarts on a crash: Convex, Vite, the GPU worker (sweeping) and the README progress updater. Logs go to logs/.
+# restarts on a crash: Convex, Vite and the GPU worker (sweeping). Logs go to logs/.
 #
 #   ./up.sh            # start (or restart) everything
 #   ./up.sh stop       # stop everything
@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$PWD
-UNITS=(neuronaut-convex neuronaut-vite neuronaut-worker neuronaut-readme)
+UNITS=(neuronaut-convex neuronaut-vite neuronaut-worker)
 
 for u in "${UNITS[@]}"; do
   systemctl --user stop "$u" 2>/dev/null || true
@@ -36,5 +36,4 @@ run() {  # unit, working dir, command...
 run neuronaut-convex "$ROOT" env CONVEX_AGENT_MODE=anonymous CONVEX_TMPDIR="$ROOT/.tmp" bunx convex dev --tail-logs always
 run neuronaut-vite "$ROOT" bunx vite --port 5173 --host 127.0.0.1
 run neuronaut-worker "$ROOT/worker" bash -c "set -a; . ./${WORKER_ENV:-.env.local}; set +a; exec uv run python main.py --sweep"
-run neuronaut-readme "$ROOT" python3 worker/readme_progress.py
 systemctl --user --no-pager list-units 'neuronaut-*'
