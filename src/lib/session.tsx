@@ -52,13 +52,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (state === "needs-handle") setAsking(true);
   }, [state, sessionId]);
 
-  const requireJoin = useCallback(() => {
-    if (state === "signed-out") {
-      clerk.openSignIn();
-      return Promise.resolve(false);
-    }
+  const requireJoin = useCallback(async () => {
     if (state === "needs-handle") setAsking(true);
-    return gate.request();
+    const outcome = await gate.request();
+    // Signed out now, or a click made while auth was loading by someone who turned out to be signed out.
+    if (outcome === "signed-out") clerk.openSignIn();
+    return outcome === "ready";
   }, [state, clerk, gate]);
 
   const cancel = () => {

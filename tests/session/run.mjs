@@ -104,6 +104,18 @@ await test("signed-out actions open Clerk without executing gameplay", async (p)
 await test("explicit sign-out cancels readiness waiters before auth catches up", async (p) => {
   await p.evaluate(async () => { await harness.render({ loading: true, me: undefined }); await harness.request("a"); await harness.signOut(); });
   assert.deepEqual(await outcomes(p), { a: false });
+  assert.equal((await p.evaluate(() => harness.clerkCalls())).signIns, 0);
+});
+await test("a click while auth loads opens Clerk once the visitor turns out to be signed out", async (p) => {
+  await p.evaluate(async () => { await harness.render({ sessionId: undefined, loading: true, authenticated: false, me: undefined }); await harness.request("a"); });
+  await p.evaluate(() => harness.render({ sessionId: null, loading: false }));
+  assert.deepEqual(await outcomes(p), { a: false });
+  assert.equal((await p.evaluate(() => harness.clerkCalls())).signIns, 1);
+});
+await test("a click before Clerk loads completes for the account that loads", async (p) => {
+  await p.evaluate(async () => { await harness.render({ sessionId: undefined, loading: true, me: undefined }); await harness.request("a"); });
+  await p.evaluate((me) => harness.render({ sessionId: "alice", loading: false, me }), player("Alice"));
+  assert.deepEqual(await outcomes(p), { a: true });
 });
 if (process.env.SESSION_DIAGNOSTICS) {
   // Observations, not security pass assertions: these isolate local-state/cache-display limitations.
